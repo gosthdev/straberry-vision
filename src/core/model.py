@@ -19,6 +19,7 @@ import torch.nn.functional as F
 import os
 import glob
 import time
+import random
 from sklearn.model_selection import train_test_split
 import warnings
 warnings.filterwarnings('ignore')
@@ -548,7 +549,24 @@ def visualize_predictions(model, val_loader, epoch, save_path):
     
     model.eval()
     with torch.no_grad():
-        images, target_boxes, target_labels = next(iter(val_loader))
+        try:
+            total_batches = len(val_loader)
+        except TypeError:
+            total_batches = None
+
+        if total_batches:
+            random_batch_idx = random.randrange(total_batches)
+            selected_batch = None
+            for idx, batch in enumerate(val_loader):
+                if idx == random_batch_idx:
+                    selected_batch = batch
+                    break
+            if selected_batch is None:
+                selected_batch = next(iter(val_loader))
+        else:
+            selected_batch = next(iter(val_loader))
+
+        images, target_boxes, target_labels = selected_batch
         images = images.to(Config.DEVICE)
         predictions = model(images)
         
@@ -561,6 +579,8 @@ def visualize_predictions(model, val_loader, epoch, save_path):
         
         num_display = min(4, images.shape[0])
         fig, axes = plt.subplots(2, num_display, figsize=(20, 10))
+        if num_display == 1:
+            axes = np.array(axes).reshape(2, 1)
         
         colors = ['red', 'blue', 'cyan', 'yellow', 'magenta']
         
@@ -1200,8 +1220,8 @@ def test_model_on_image(model_path, image_path, conf_threshold=0.2, save_output=
         plt.savefig(output_path, dpi=150, bbox_inches='tight')
         print(f"✓ Imagen guardada: {output_path}")
     """
-    plt.show(block=True)
 
+    plt.show()
 
     print("\n" + "="*60)
     print("DETECCIONES POR CLASE:")
@@ -1293,8 +1313,9 @@ def main(resume=True):
     print("="*60)
 
 if __name__ == "__main__":
-    #main(resume=True)
+    main(resume=True)
 
+    """
     result = test_model_on_folder(
          model_path='src/data/processed/models/best_model.pth',
          folder_path='test/files/',
@@ -1302,4 +1323,5 @@ if __name__ == "__main__":
          max_images=10
     )
 
+    """
 

@@ -7,7 +7,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 import glob
-
+from urllib.parse import urlparse, unquote
+from .config import Config
+from .dataset import get_transforms
+from .architecture import SGSNet  # nuevo
 from .config import Config
 from .dataset import get_transforms
 
@@ -297,3 +300,74 @@ def test_model_on_folder(model_path, folder_path, conf_threshold=0.5, max_images
     print(f"Confianza promedio: {avg_confidence:.4f}")
 
     return results
+
+def load_model(model_path, device=None):
+    device = device or Config.DEVICE
+    checkpoint = torch.load(model_path, map_location=device, weights_only=False)
+    model = SGSNet(Config.NUM_CLASSES).to(device)
+    state_dict = checkpoint.get('model_state_dict', checkpoint)
+    model.load_state_dict(state_dict)
+    model.eval()
+    return model
+
+def _resolve_image_path(image_path):
+    """Convierte rutas tipo file:///... al path del sistema."""
+    if isinstance(image_path, str) and image_path.startswith("file:"):
+        parsed = urlparse(image_path)
+        return unquote(parsed.path)
+    return image_path
+
+
+def preprocess_image(image_path):
+    image_path = _resolve_image_path(image_path)
+    image_bgr = cv2.imread(image_path)
+    if image_bgr is None:
+        raise FileNotFoundError(f"No se pudo leer la imagen: {image_path}")
+    image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
+    orig_h, orig_w = image_rgb.shape[:2]
+    _, val_transform = get_transforms()
+    transformed = val_transform(image=image_rgb, bboxes=[], class_labels=[])
+    tensor = transformed['image'].unsqueeze(0).to(Config.DEVICE)
+    return image_rgb, tensor, (orig_w, orig_h)
+
+def detections_to_pixels(detections, orig_size):
+    orig_w, orig_h = orig_size
+    scale_x = orig_w / Config.IMAGE_SIZE
+    scale_y = orig_h / Config.IMAGE_SIZE
+    pixel_dets = []
+    for det in detections:
+        cx, cy, w, h = det['bbox']
+        x1 = max(0.0, (cx - w / 2) * Config.IMAGE_SIZE) * scale_x
+        y1 = max(0.0, (cy - h / 2) * Config.IMAGE_SIZE) * scale_y
+        x2 = min(1.0, (cx + w / 2) * Config.IMAGE_SIZE / Config.IMAGE_SIZE) * orig_w if Config.IMAGE_SIZE else (cx + w / 2) * Config.IMAGE_SIZE * scale_x
+        y2 = min(1.0, (cy + h / 2) * Config.IMAGE_SIZE / Config.IMAGE_SIZE) * orig_h if Config.IMAGE_SIZE else (cy + h / 2) * Config.IMAGE_SIZE * scale_y
+        pixel_dets.append({
+            "label": det['class_name'],
+            "score": float(det['obj_conf']),
+            "xmin": float(x1),
+            "ymin": float(y1),
+            "xmax": float(x2),
+            "ymax": float(y2),
+        })
+    return pixel_dets
+
+def run_inference_on_image(model, image_path, conf_threshold=None):
+    conf_threshold = conf_threshold or Config.CONF_THRESHOLD
+    image_rgb, tensor, orig_size = preprocess_image(image_path)
+    with torch.no_grad():
+        predictions = model(tensor)
+    detections = extract_detections(predictions, conf_threshold)
+    torch.cuda.empty_cache()  # si usas GPU
+    del tensor
+    del predictions
+    return detections_to_pixels(detections, orig_size)
+
+def run_batch_inference(image_paths, model_path, conf_threshold=None):
+    conf_threshold = conf_threshold or Config.CONF_THRESHOLD
+    model = load_model(model_path)
+    results = []
+    for path in image_paths:
+        preds = run_inference_on_image(model, path, conf_threshold)
+        results.append(preds)
+    return results
+# ...existing code...

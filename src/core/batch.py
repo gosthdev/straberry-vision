@@ -19,7 +19,9 @@ Config.DEVICE = torch.device("cpu")
 
 MODEL_PATH = Path("src/data/processed/models/best_model.pth")
 INPUT_DIR = Path("test/data/batch_incoming")
-OUTPUT_DIR = "test/data/batch_outputs"
+OUTPUT_DIR = Path("test/data/batch_outputs")
+PROCESSED_DIR = Path("test/data/batch_idk")
+MAX_IMAGES = int(os.environ.get("BATCH_MAX_IMAGES", "250"))
 
 _model_cache = {}
 
@@ -48,7 +50,8 @@ def infer_udf(path):
 def run():
     spark = build_session()
     INPUT_DIR.mkdir(parents=True, exist_ok=True)
-    Path(OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
 
     df = (spark.read.format("binaryFile")
           .option("pathGlobFilter", "*.webp")
@@ -58,13 +61,27 @@ def run():
     # Limitar el número de particiones para reducir tareas concurrentes
     df = df.coalesce(1)
 
+    if MAX_IMAGES > 0:
+        df = df.limit(MAX_IMAGES)
+
     if df.rdd.isEmpty():
         print("No hay imágenes para procesar.")
         spark.stop()
         return
 
     result = df.withColumn("detections", infer_udf(F.col("path")))
-    result.write.mode("overwrite").parquet(OUTPUT_DIR)
+    result.write.mode("overwrite").parquet(str(OUTPUT_DIR))
+
+    processed_paths = [Path(row.path) for row in df.select("path").collect()]
+    for path in processed_paths:
+        if not path.exists():
+            continue
+        target = PROCESSED_DIR / path.name
+        counter = 1
+        while target.exists():
+            target = PROCESSED_DIR / f"{path.stem}_{counter}{path.suffix}"
+            counter += 1
+        path.replace(target)
     spark.stop()
 
 if __name__ == "__main__":

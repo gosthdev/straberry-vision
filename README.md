@@ -21,7 +21,9 @@ PYTHONPATH=$(pwd) spark-submit \
   src/core/batch.py
 ```
 
-Si prefieres un CSV legible por Excel/LibreOffice, ejecuta:
+Al terminar, Spark deja un único parquet (`part-*.parquet`) y un CSV plano `batch_outputs.csv` en `test/data/batch_outputs/` listos para inspección.
+
+Si necesitas exportaciones adicionales (por ejemplo, sin ordenar o hacia otra ruta), puedes usar el script auxiliar:
 
 ```bash
 source env/bin/activate

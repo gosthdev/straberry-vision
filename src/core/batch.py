@@ -1,4 +1,5 @@
 import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -20,8 +21,9 @@ Config.DEVICE = torch.device("cpu")
 MODEL_PATH = Path("src/data/processed/models/best_model.pth")
 INPUT_DIR = Path("test/data/batch_incoming")
 OUTPUT_DIR = Path("test/data/batch_outputs")
-PROCESSED_DIR = Path("test/data/batch_idk")
-MAX_IMAGES = int(os.environ.get("BATCH_MAX_IMAGES", "250"))
+STAGING_DIR = Path("test/data/batch_outputs_staging")
+CSV_FILENAME = "batch_outputs.csv"
+MAX_IMAGES = int(os.environ.get("BATCH_MAX_IMAGES", "150"))
 
 _model_cache = {}
 
@@ -50,38 +52,82 @@ def infer_udf(path):
 def run():
     spark = build_session()
     INPUT_DIR.mkdir(parents=True, exist_ok=True)
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+    if OUTPUT_DIR.exists():
+        shutil.rmtree(OUTPUT_DIR)
+    if STAGING_DIR.exists():
+        shutil.rmtree(STAGING_DIR)
+    OUTPUT_DIR.parent.mkdir(parents=True, exist_ok=True)
+    STAGING_DIR.mkdir(parents=True, exist_ok=True)
+    csv_path = OUTPUT_DIR / CSV_FILENAME
+    if csv_path.exists():
+        csv_path.unlink()
 
-    df = (spark.read.format("binaryFile")
-          .option("pathGlobFilter", "*.webp")
-          .load(str(INPUT_DIR))
-        .select("path"))
+    image_paths = sorted(INPUT_DIR.glob("*.webp"))
 
-    # Limitar el número de particiones para reducir tareas concurrentes
-    df = df.coalesce(1)
-
-    if MAX_IMAGES > 0:
-        df = df.limit(MAX_IMAGES)
-
-    if df.rdd.isEmpty():
+    if not image_paths:
         print("No hay imágenes para procesar.")
         spark.stop()
         return
 
-    result = df.withColumn("detections", infer_udf(F.col("path")))
-    result.write.mode("overwrite").parquet(str(OUTPUT_DIR))
+    batch_size = MAX_IMAGES if MAX_IMAGES > 0 else len(image_paths)
+    total_images = len(image_paths)
 
-    processed_paths = [Path(row.path) for row in df.select("path").collect()]
-    for path in processed_paths:
-        if not path.exists():
-            continue
-        target = PROCESSED_DIR / path.name
-        counter = 1
-        while target.exists():
-            target = PROCESSED_DIR / f"{path.stem}_{counter}{path.suffix}"
-            counter += 1
-        path.replace(target)
+    for start in range(0, total_images, batch_size):
+        chunk = image_paths[start:start + batch_size]
+        chunk_as_str = [str(path) for path in chunk]
+
+        df = (spark.read.format("binaryFile")
+              .load(chunk_as_str)
+              .select("path"))
+
+        df = df.coalesce(1)
+
+        result = df.withColumn("detections", infer_udf(F.col("path")))
+        result.write.mode("append").parquet(str(STAGING_DIR))
+
+        for path in chunk:
+            try:
+                path.unlink()
+            except FileNotFoundError:
+                pass
+
+    final_df = spark.read.parquet(str(STAGING_DIR))
+    (final_df.coalesce(1)
+             .write
+             .mode("overwrite")
+             .parquet(str(OUTPUT_DIR)))
+
+    detections_df = (
+        final_df
+        .select(F.col("path"), F.explode("detections").alias("det"))
+        .select(
+            F.col("path"),
+            F.col("det.label").alias("label"),
+            F.col("det.score").alias("score"),
+            F.col("det.xmin").alias("xmin"),
+            F.col("det.ymin").alias("ymin"),
+            F.col("det.xmax").alias("xmax"),
+            F.col("det.ymax").alias("ymax"),
+        )
+        .orderBy("path", F.desc("score"))
+    )
+
+    csv_temp_dir = OUTPUT_DIR / "_csv_temp"
+    if csv_temp_dir.exists():
+        shutil.rmtree(csv_temp_dir)
+
+    detections_df.coalesce(1).write.mode("overwrite").option("header", True).csv(str(csv_temp_dir))
+
+    part_file = next(csv_temp_dir.glob("part-*.csv"), None)
+    if part_file is not None:
+        shutil.move(str(part_file), str(csv_path))
+    else:
+        header = ",".join(field.name for field in detections_df.schema)
+        csv_path.write_text(header + "\n")
+
+    shutil.rmtree(csv_temp_dir, ignore_errors=True)
+    shutil.rmtree(STAGING_DIR, ignore_errors=True)
+
     spark.stop()
 
 if __name__ == "__main__":

@@ -125,33 +125,37 @@ def extract_detections(predictions, conf_threshold):
     detections = []
     
     for anchor_idx in range(num_anchors):
+        anchor_w = Config.ANCHORS[anchor_idx, 0].item()
+        anchor_h = Config.ANCHORS[anchor_idx, 1].item()
+
         for gy in range(H):
             for gx in range(W):
                 obj_conf = torch.sigmoid(pred_reshaped[0, anchor_idx, gy, gx, 0]).item()
-                
-                if obj_conf > conf_threshold:
-                    # Decodificar bbox
-                    dx = pred_reshaped[0, anchor_idx, gy, gx, 1].item()
-                    dy = pred_reshaped[0, anchor_idx, gy, gx, 2].item()
-                    dw = pred_reshaped[0, anchor_idx, gy, gx, 3].item()
-                    dh = pred_reshaped[0, anchor_idx, gy, gx, 4].item()
 
-                    cx = (gx + dx) / W
-                    cy = (gy + dy) / H
-                    w = dw
-                    h = dh
+                dx = torch.sigmoid(pred_reshaped[0, anchor_idx, gy, gx, 1]).item()
+                dy = torch.sigmoid(pred_reshaped[0, anchor_idx, gy, gx, 2]).item()
+                dw = pred_reshaped[0, anchor_idx, gy, gx, 3].item()
+                dh = pred_reshaped[0, anchor_idx, gy, gx, 4].item()
 
-                    # Obtener clase
-                    class_scores = torch.sigmoid(pred_reshaped[0, anchor_idx, gy, gx, 5:])
-                    class_conf, class_idx = torch.max(class_scores, dim=0)
+                cx = (gx + dx) / W
+                cy = (gy + dy) / H
+                w = anchor_w * np.exp(dw)
+                h = anchor_h * np.exp(dh)
 
-                    detections.append({
-                        'bbox': [cx, cy, w, h],
-                        'obj_conf': obj_conf,
-                        'class_idx': class_idx.item(),
-                        'class_conf': class_conf.item(),
-                        'class_name': Config.CLASS_NAMES[class_idx.item()]
-                    })
+                class_scores = torch.sigmoid(pred_reshaped[0, anchor_idx, gy, gx, 5:])
+                class_conf, class_idx = torch.max(class_scores, dim=0)
+                final_conf = obj_conf * class_conf.item()
+
+                if final_conf < conf_threshold:
+                    continue
+
+                detections.append({
+                    'bbox': [cx, cy, w, h],
+                    'obj_conf': final_conf,
+                    'class_idx': class_idx.item(),
+                    'class_conf': class_conf.item(),
+                    'class_name': Config.CLASS_NAMES[class_idx.item()]
+                })
     
     return detections
 

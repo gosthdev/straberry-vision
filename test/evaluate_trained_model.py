@@ -29,12 +29,10 @@ def _ensure_project_root_on_path() -> None:
 
 _ensure_project_root_on_path()
 
-from src.core.model import (
-    Config,
-    SGSNet,
-    non_max_suppression,
-    load_data,
-)
+from src.core.config import Config
+from src.core.architecture import SGSNet
+from src.core.metrics import non_max_suppression
+from src.core.dataset import load_data
 
 # Valores predeterminados para ejecución directa (por ejemplo, botón "Run" en VS Code)
 DEFAULT_RUN_CONFIG = {

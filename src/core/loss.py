@@ -1,6 +1,8 @@
-"""
-Funciones de pérdida para SGSNet
-"""
+"""Funciones de pérdida para SGSNet mejorado."""
+from __future__ import annotations
+
+from typing import Iterable, Sequence
+
 import torch
 import torch.nn as nn
 
@@ -8,139 +10,145 @@ from .config import Config
 
 
 class SGSNetLoss(nn.Module):
-    """
-    Función de pérdida personalizada para SGSNet
-    Combina pérdidas de objectness, bounding box y clasificación
-    """
-    def __init__(self, num_classes, anchors):
+    """Pérdida multiescala similar a YOLO para entrenamiento de SGSNet."""
+
+    def __init__(self, num_classes: int, anchors: torch.Tensor) -> None:
         super().__init__()
+        if anchors.dim() == 2:
+            anchors = anchors.view(1, -1, 2)
         self.num_classes = num_classes
         self.anchors = anchors.to(Config.DEVICE)
-        self.bce_obj = nn.BCEWithLogitsLoss(reduction='none')
-        self.bce_cls = nn.BCEWithLogitsLoss(reduction='none')
-        self.mse_box = nn.MSELoss(reduction='none')
+        self.strides = Config.STRIDES
+        self.num_scales = len(self.strides)
+        self.anchors_per_scale = anchors.shape[1]
 
-    def forward(self, predictions, targets_boxes, targets_labels):
-        """
-        Calcula la pérdida total
-        
-        Args:
-            predictions: Predicciones del modelo [B, C, H, W]
-            targets_boxes: Lista de cajas ground truth por imagen
-            targets_labels: Lista de etiquetas por imagen
-            
-        Returns:
-            total_loss: Pérdida total
-            loss_dict: Diccionario con componentes individuales
-        """
-        B = predictions.shape[0]
-        H = W = Config.IMAGE_SIZE // 32
-        num_anchors = 3
+        self.bce_obj = nn.BCEWithLogitsLoss(reduction="none")
+        self.bce_cls = nn.BCEWithLogitsLoss(reduction="none")
+        self.mse_box = nn.MSELoss(reduction="none")
 
-        # Reformatear predicciones
-        predictions = predictions.view(B, num_anchors, 5 + self.num_classes, H, W)
-        predictions = predictions.permute(0, 1, 3, 4, 2).contiguous()
+    def forward(
+        self,
+        predictions: Sequence[torch.Tensor] | torch.Tensor,
+        targets_boxes: Iterable[torch.Tensor],
+        targets_labels: Iterable[torch.Tensor],
+    ) -> tuple[torch.Tensor, dict[str, float]]:
+        if isinstance(predictions, torch.Tensor):
+            predictions = [predictions]
 
-        # Extraer componentes
-        pred_obj = predictions[..., 0]
-        pred_bbox = predictions[..., 1:5]
-        pred_cls = predictions[..., 5:]
+        obj_losses = []
+        bbox_losses = []
+        cls_losses = []
 
-        total_obj_loss = 0
-        total_bbox_loss = 0
-        total_cls_loss = 0
-        total_samples = 0
+        for scale_idx, pred_scale in enumerate(predictions):
+            anchor_set = self.anchors[scale_idx].to(pred_scale.device)
+            obj, bbox, cls = self._scale_loss(pred_scale, targets_boxes, targets_labels, anchor_set)
+            obj_losses.append(obj)
+            bbox_losses.append(bbox)
+            cls_losses.append(cls)
 
-        for b in range(B):
-            gt_boxes = targets_boxes[b]
-            gt_labels = targets_labels[b]
+        total_obj = torch.stack(obj_losses).mean()
+        total_bbox = torch.stack(bbox_losses).mean()
+        total_cls = torch.stack(cls_losses).mean()
 
-            # Inicializar targets
-            target_obj = torch.zeros((num_anchors, H, W), device=predictions.device)
-            target_bbox = torch.zeros((num_anchors, H, W, 4), device=predictions.device)
-            target_cls = torch.zeros((num_anchors, H, W, self.num_classes), device=predictions.device)
-            obj_mask = torch.zeros((num_anchors, H, W), device=predictions.device)
+        loss = 2.0 * total_obj + 5.0 * total_bbox + 2.0 * total_cls
 
-            if len(gt_boxes) == 0:
-                # Solo penalizar falsos positivos
-                obj_loss = self.bce_obj(pred_obj[b], target_obj).mean()
-                total_obj_loss += obj_loss
-                total_samples += 1
-                continue
+        return loss, {
+            "obj": total_obj.item(),
+            "bbox": total_bbox.item(),
+            "class": total_cls.item(),
+        }
 
-            # Asignar cada GT box al mejor anchor
-            for gt_box, gt_label in zip(gt_boxes, gt_labels):
-                cx, cy, w, h = gt_box
+    def _scale_loss(
+        self,
+        pred_scale: torch.Tensor,
+        targets_boxes: Iterable[torch.Tensor],
+        targets_labels: Iterable[torch.Tensor],
+        anchors: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        B, _, H, W = pred_scale.shape
+        device = pred_scale.device
+        num_anchors = anchors.shape[0]
 
-                if not (0 < cx < 1 and 0 < cy < 1 and w > 0 and h > 0):
-                    continue
+        pred_scale = pred_scale.view(B, num_anchors, self.num_classes + 5, H, W)
+        pred_scale = pred_scale.permute(0, 1, 3, 4, 2).contiguous()
 
-                # Posición en la grilla
-                gx = int(cx * W)
-                gy = int(cy * H)
-                gx = min(max(gx, 0), W - 1)
-                gy = min(max(gy, 0), H - 1)
+        pred_obj = pred_scale[..., 0]
+        pred_bbox = pred_scale[..., 1:5]
+        pred_cls = pred_scale[..., 5:]
 
-                # Encontrar mejor anchor por IoU
-                best_anchor_idx = 0
-                best_iou = 0
-                for anchor_idx in range(num_anchors):
-                    anchor_w, anchor_h = self.anchors[anchor_idx]
-                    iou = min(w, anchor_w) * min(h, anchor_h) / (w * h + anchor_w * anchor_h - min(w, anchor_w) * min(h, anchor_h))
-                    if iou > best_iou:
-                        best_iou = iou
-                        best_anchor_idx = anchor_idx
+        obj_losses = []
+        bbox_losses = []
+        cls_losses = []
 
-                # Asignar target al mejor anchor
-                target_obj[best_anchor_idx, gy, gx] = 1.0
-                obj_mask[best_anchor_idx, gy, gx] = 1.0
+        for b, (gt_boxes, gt_labels) in enumerate(zip(targets_boxes, targets_labels)):
+            gt_boxes = gt_boxes.to(device)
+            gt_labels = gt_labels.to(device)
 
-                # Offsets relativos a la celda
-                target_bbox[best_anchor_idx, gy, gx, 0] = cx * W - gx
-                target_bbox[best_anchor_idx, gy, gx, 1] = cy * H - gy
-                target_bbox[best_anchor_idx, gy, gx, 2] = torch.log(w / self.anchors[best_anchor_idx, 0] + 1e-16)
-                target_bbox[best_anchor_idx, gy, gx, 3] = torch.log(h / self.anchors[best_anchor_idx, 1] + 1e-16)
+            target_obj = torch.zeros((num_anchors, H, W), device=device)
+            target_bbox = torch.zeros((num_anchors, H, W, 4), device=device)
+            target_cls = torch.zeros((num_anchors, H, W, self.num_classes), device=device)
+            obj_mask = torch.zeros((num_anchors, H, W), device=device)
 
-                # Clase
-                label_idx = int(gt_label)
-                if 0 <= label_idx < self.num_classes:
-                    target_cls[best_anchor_idx, gy, gx, label_idx] = 1.0
+            if gt_boxes.numel() > 0:
+                self._assign_targets(gt_boxes, gt_labels, anchors, target_obj, target_bbox, target_cls, obj_mask, H, W)
 
-            # Calcular pérdidas
-            # Objectness loss con balanceo
-            pos_weight = (obj_mask == 0).sum() / (obj_mask.sum() + 1e-16)
+            pos_weight = (obj_mask == 0).sum() / (obj_mask.sum() + 1e-9)
             obj_loss = self.bce_obj(pred_obj[b], target_obj)
             obj_loss = torch.where(obj_mask > 0, obj_loss * pos_weight, obj_loss)
-            total_obj_loss += obj_loss.mean()
+            obj_losses.append(obj_loss.mean())
 
-            # BBox y Class loss solo en posiciones positivas
             if obj_mask.sum() > 0:
                 pos_mask = obj_mask > 0
-                pred_bbox_pos = pred_bbox[b][pos_mask]
-                target_bbox_pos = target_bbox[pos_mask]
-                bbox_loss = self.mse_box(pred_bbox_pos, target_bbox_pos).mean()
-                total_bbox_loss += bbox_loss
+                bbox_loss = self.mse_box(pred_bbox[b][pos_mask], target_bbox[pos_mask]).mean()
+                cls_loss = self.bce_cls(pred_cls[b][pos_mask], target_cls[pos_mask]).mean()
+            else:
+                bbox_loss = torch.zeros((), device=device)
+                cls_loss = torch.zeros((), device=device)
 
-                pred_cls_pos = pred_cls[b][pos_mask]
-                target_cls_pos = target_cls[pos_mask]
-                cls_loss = self.bce_cls(pred_cls_pos, target_cls_pos).mean()
-                total_cls_loss += cls_loss
+            bbox_losses.append(bbox_loss)
+            cls_losses.append(cls_loss)
 
-            total_samples += 1
+        return torch.stack(obj_losses).mean(), torch.stack(bbox_losses).mean(), torch.stack(cls_losses).mean()
 
-        # Promediar pérdidas
-        total_obj_loss = total_obj_loss / total_samples
-        total_bbox_loss = total_bbox_loss / total_samples if total_bbox_loss != 0 else torch.tensor(0.0, device=predictions.device)
-        total_cls_loss = total_cls_loss / total_samples if total_cls_loss != 0 else torch.tensor(0.0, device=predictions.device)
+    def _assign_targets(
+        self,
+        gt_boxes: torch.Tensor,
+        gt_labels: torch.Tensor,
+        anchors: torch.Tensor,
+        target_obj: torch.Tensor,
+        target_bbox: torch.Tensor,
+        target_cls: torch.Tensor,
+        obj_mask: torch.Tensor,
+        H: int,
+        W: int,
+    ) -> None:
+        device = target_obj.device
+        num_anchors = anchors.shape[0]
 
-        # Pesos ajustados (importancia relativa)
-        total_loss = 2.0 * total_obj_loss + 5.0 * total_bbox_loss + 2.0 * total_cls_loss
+        gt_boxes = gt_boxes.clamp_(min=1e-4, max=1 - 1e-4)
+        anchor_wh = anchors.to(device)
 
-        return total_loss, {
-            'obj': total_obj_loss.item(),
-            'bbox': total_bbox_loss.item(),
-            'class': total_cls_loss.item()
-        }
+        wh = gt_boxes[:, 2:4]
+        inter = torch.minimum(wh[:, None, :], anchor_wh[None, :, :]).prod(-1)
+        union = wh[:, None, :].prod(-1) + anchor_wh[None, :, :].prod(-1) - inter + 1e-9
+        best_anchor = torch.argmax(inter / union, dim=1)
+
+        for idx, anchor_idx in enumerate(best_anchor.tolist()):
+            cx, cy, w, h = gt_boxes[idx]
+            gx = min(max(int(cx.item() * W), 0), W - 1)
+            gy = min(max(int(cy.item() * H), 0), H - 1)
+
+            obj_mask[anchor_idx, gy, gx] = 1.0
+            target_obj[anchor_idx, gy, gx] = 1.0
+
+            target_bbox[anchor_idx, gy, gx, 0] = cx * W - gx
+            target_bbox[anchor_idx, gy, gx, 1] = cy * H - gy
+            target_bbox[anchor_idx, gy, gx, 2] = torch.log(w / anchor_wh[anchor_idx, 0] + 1e-9)
+            target_bbox[anchor_idx, gy, gx, 3] = torch.log(h / anchor_wh[anchor_idx, 1] + 1e-9)
+
+            label_idx = int(gt_labels[idx].item())
+            if 0 <= label_idx < self.num_classes:
+                target_cls[anchor_idx, gy, gx, label_idx] = 1.0
 
 
 def calculate_iou(box1, box2):

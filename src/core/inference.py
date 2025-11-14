@@ -1,13 +1,16 @@
 """
 Funciones de inferencia y testing del modelo
 """
-import torch
-import cv2
-import numpy as np
-import matplotlib.pyplot as plt
-import os
 import glob
+import os
+from typing import Iterable, List
 
+import cv2
+import matplotlib.pyplot as plt
+import numpy as np
+import torch
+
+from .architecture import SGSNet
 from .config import Config
 from .dataset import get_transforms
 
@@ -72,15 +75,26 @@ def test_model_on_image(model_path, image_path, conf_threshold=0.2, save_output=
         predictions = model(image_tensor)
 
     # Procesar predicciones
-    detections = extract_detections(predictions, conf_threshold)
+    detections_batch = extract_detections(predictions, conf_threshold)
+    detections = detections_batch[0]
     print(f"✓ Detecciones encontradas: {len(detections)}")
 
-    # Mostrar estadísticas
-    B, C, H, W = predictions.shape
-    pred_reshaped = predictions.view(B, 3, 5 + Config.NUM_CLASSES, H, W)
-    pred_reshaped = pred_reshaped.permute(0, 1, 3, 4, 2).contiguous()
-    obj_scores = torch.sigmoid(pred_reshaped[0, :, :, :, 0])
-    
+    # Mostrar estadísticas básicas sobre objectness
+    if isinstance(predictions, torch.Tensor):
+        prediction_scales = [predictions]
+    else:
+        prediction_scales = list(predictions)
+
+    obj_scores_list = []
+    for scale_pred in prediction_scales:
+        num_anchors = Config.ANCHORS.shape[1]
+        scale_sigmoid = torch.sigmoid(
+            scale_pred.view(1, num_anchors, Config.NUM_CLASSES + 5, scale_pred.shape[2], scale_pred.shape[3])[:, :, :, :, 0]
+        )
+        obj_scores_list.append(scale_sigmoid.flatten())
+
+    obj_scores = torch.cat(obj_scores_list)
+
     print(f"\nMÉTRICAS:")
     print(f"  Confianza máxima: {obj_scores.max().item():.4f}")
     print(f"  Confianza promedio: {obj_scores.mean().item():.4f}")
@@ -106,98 +120,126 @@ def test_model_on_image(model_path, image_path, conf_threshold=0.2, save_output=
     }
 
 
-def extract_detections(predictions, conf_threshold):
-    """
-    Extrae detecciones de las predicciones del modelo
-    
-    Args:
-        predictions: Tensor de predicciones
-        conf_threshold: Umbral de confianza
-        
-    Returns:
-        list: Lista de detecciones
-    """
-    B, C, H, W = predictions.shape
-    num_anchors = 3
-    pred_reshaped = predictions.view(B, num_anchors, 5 + Config.NUM_CLASSES, H, W)
-    pred_reshaped = pred_reshaped.permute(0, 1, 3, 4, 2).contiguous()
+def extract_detections(
+    predictions: Iterable[torch.Tensor] | torch.Tensor,
+    conf_threshold: float,
+) -> List[List[dict]]:
+    """Decodifica predicciones multiescala y agrupa detecciones por imagen."""
 
-    detections = []
-    
-    for anchor_idx in range(num_anchors):
-        anchor_w = Config.ANCHORS[anchor_idx, 0].item()
-        anchor_h = Config.ANCHORS[anchor_idx, 1].item()
+    if isinstance(predictions, torch.Tensor):
+        predictions = [predictions]
 
-        for gy in range(H):
-            for gx in range(W):
-                obj_conf = torch.sigmoid(pred_reshaped[0, anchor_idx, gy, gx, 0]).item()
+    batch_size = predictions[0].shape[0]
+    anchors = Config.ANCHORS.to(predictions[0].device)
 
-                dx = torch.sigmoid(pred_reshaped[0, anchor_idx, gy, gx, 1]).item()
-                dy = torch.sigmoid(pred_reshaped[0, anchor_idx, gy, gx, 2]).item()
-                dw = pred_reshaped[0, anchor_idx, gy, gx, 3].item()
-                dh = pred_reshaped[0, anchor_idx, gy, gx, 4].item()
+    all_detections: List[List[dict]] = []
 
-                cx = (gx + dx) / W
-                cy = (gy + dy) / H
-                w = anchor_w * np.exp(dw)
-                h = anchor_h * np.exp(dh)
+    for b in range(batch_size):
+        image_detections: List[dict] = []
 
-                class_scores = torch.sigmoid(pred_reshaped[0, anchor_idx, gy, gx, 5:])
-                class_conf, class_idx = torch.max(class_scores, dim=0)
-                final_conf = obj_conf * class_conf.item()
+        for scale_idx, pred_scale in enumerate(predictions):
+            num_anchors = anchors.shape[1]
+            H, W = pred_scale.shape[2], pred_scale.shape[3]
+            anchor_scale = anchors[scale_idx].cpu().numpy()
 
-                if final_conf < conf_threshold:
-                    continue
+            pred = (
+                pred_scale[b]
+                .view(num_anchors, Config.NUM_CLASSES + 5, H, W)
+                .permute(0, 2, 3, 1)
+                .detach()
+                .cpu()
+                .numpy()
+            )
 
-                detections.append({
-                    'bbox': [cx, cy, w, h],
-                    'obj_conf': final_conf,
-                    'class_idx': class_idx.item(),
-                    'class_conf': class_conf.item(),
-                    'class_name': Config.CLASS_NAMES[class_idx.item()]
-                })
-    
-    return detections
+            for anchor_idx in range(num_anchors):
+                anchor_w, anchor_h = anchor_scale[anchor_idx]
+
+                for gy in range(H):
+                    for gx in range(W):
+                        raw = pred[anchor_idx, gy, gx]
+                        obj_conf = 1.0 / (1.0 + np.exp(-raw[0]))
+                        class_scores = 1.0 / (1.0 + np.exp(-raw[5:]))
+                        class_idx = int(np.argmax(class_scores))
+                        class_conf = float(class_scores[class_idx])
+                        final_conf = obj_conf * class_conf
+
+                        if final_conf < conf_threshold:
+                            continue
+
+                        dx = 1.0 / (1.0 + np.exp(-raw[1]))
+                        dy = 1.0 / (1.0 + np.exp(-raw[2]))
+                        dw = raw[3]
+                        dh = raw[4]
+
+                        cx = (gx + dx) / W
+                        cy = (gy + dy) / H
+                        w = float(anchor_w * np.exp(dw))
+                        h = float(anchor_h * np.exp(dh))
+
+                        image_detections.append(
+                            {
+                                "bbox": [float(np.clip(cx, 0.0, 1.0)), float(np.clip(cy, 0.0, 1.0)), float(np.clip(w, 1e-4, 1.0)), float(np.clip(h, 1e-4, 1.0))],
+                                "obj_conf": float(final_conf),
+                                "class_idx": class_idx,
+                                "class_conf": class_conf,
+                                "class_name": Config.CLASS_NAMES[class_idx],
+                            }
+                        )
+
+        all_detections.append(image_detections)
+
+    return all_detections
 
 
-def visualize_detections(image, detections):
-    """
-    Dibuja las detecciones sobre la imagen
-    
-    Args:
-        image: Imagen RGB
-        detections: Lista de detecciones
-        
-    Returns:
-        np.array: Imagen con detecciones dibujadas
-    """
+def visualize_detections(image: np.ndarray, detections: List[dict]) -> np.ndarray:
+    """Dibuja las detecciones normalizadas sobre una copia de la imagen origen."""
+
     vis_image = image.copy()
-    colors = [
-        (255, 0, 0),      # flowering - Rojo
-        (0, 255, 0),      # growing_g - Verde
-        (0, 255, 255),    # growing_w - Cyan
-        (255, 255, 0),    # nearly_m - Amarillo
-        (255, 0, 255)     # mature - Magenta
+    height, width = vis_image.shape[:2]
+
+    base_colors = [
+        (255, 0, 0),      # flowering - rojo
+        (0, 255, 0),      # growing_g - verde
+        (0, 255, 255),    # growing_w - cian
+        (255, 255, 0),    # nearly_m - amarillo
+        (255, 0, 255),    # mature - magenta
     ]
 
     for det in detections:
-        cx, cy, w, h = det['bbox']
-        
-        # Convertir a pixeles
-        x1 = int((cx - w/2) * Config.IMAGE_SIZE)
-        y1 = int((cy - h/2) * Config.IMAGE_SIZE)
-        x2 = int((cx + w/2) * Config.IMAGE_SIZE)
-        y2 = int((cy + h/2) * Config.IMAGE_SIZE)
+        cx, cy, w, h = det["bbox"]
+        obj_conf = det.get("obj_conf", 0.0)
+        class_idx = det.get("class_idx", 0)
+        class_name = det.get("class_name", str(class_idx))
 
-        color = colors[det['class_idx']]
+        x_center = cx * width
+        y_center = cy * height
+        half_w = (w * width) / 2.0
+        half_h = (h * height) / 2.0
+
+        x1 = int(np.clip(x_center - half_w, 0, width - 1))
+        y1 = int(np.clip(y_center - half_h, 0, height - 1))
+        x2 = int(np.clip(x_center + half_w, 0, width - 1))
+        y2 = int(np.clip(y_center + half_h, 0, height - 1))
+
+        color = base_colors[class_idx % len(base_colors)]
         cv2.rectangle(vis_image, (x1, y1), (x2, y2), color, 2)
 
-        label = f"{det['class_name']}: {det['obj_conf']:.2f}"
+        label = f"{class_name}: {obj_conf:.2f}"
         (text_w, text_h), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
-        cv2.rectangle(vis_image, (x1, y1 - text_h - 10), (x1 + text_w, y1), color, -1)
-        cv2.putText(vis_image, label, (x1, y1 - 5),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-    
+        text_x2 = min(x1 + text_w + 4, width - 1)
+        text_y1 = max(y1 - text_h - 6, 0)
+        cv2.rectangle(vis_image, (x1, text_y1), (text_x2, y1), color, -1)
+        cv2.putText(
+            vis_image,
+            label,
+            (x1 + 2, y1 - 4),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            (0, 0, 0),
+            1,
+            cv2.LINE_AA,
+        )
+
     return vis_image
 
 

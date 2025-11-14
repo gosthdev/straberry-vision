@@ -1,8 +1,10 @@
 """
 Métricas y evaluación del modelo
 """
-import torch
+from typing import Iterable, Sequence
+
 import numpy as np
+import torch
 
 from .config import Config
 from .loss import calculate_iou
@@ -109,89 +111,111 @@ class Metrics:
         }
 
 
-def non_max_suppression(predictions, conf_threshold=0.3, iou_threshold=0.4):
+def non_max_suppression(
+    predictions: Sequence[torch.Tensor] | torch.Tensor,
+    conf_threshold: float = 0.3,
+    iou_threshold: float = 0.4,
+):
     """
     Non-Maximum Suppression para eliminar detecciones duplicadas
     
     Args:
-        predictions: Tensor [B, C, H, W] con predicciones del modelo
+        predictions: Tensor o secuencia de tensores [B, C, H, W] por escala
         conf_threshold: Umbral de confianza mínimo
         iou_threshold: Umbral de IoU para considerar duplicados
     
     Returns:
         Lista de detecciones por imagen: [(boxes, labels, scores), ...]
     """
-    B, C, H, W = predictions.shape
-    predictions = predictions.view(B, 3, 5 + Config.NUM_CLASSES, H, W)
-    predictions = predictions.permute(0, 1, 3, 4, 2).contiguous()
-    
+    if isinstance(predictions, torch.Tensor):
+        predictions = [predictions]
+
+    batch_size = predictions[0].shape[0]
+    anchors = Config.ANCHORS.to(predictions[0].device)
     batch_detections = []
-    
-    for b in range(B):
+
+    for b in range(batch_size):
         detections = []
-        
-        # Extraer todas las detecciones con confianza > threshold
-        for anchor_idx in range(3):
-            for gy in range(H):
-                for gx in range(W):
-                    obj_conf = torch.sigmoid(predictions[b, anchor_idx, gy, gx, 0]).item()
-                    
-                    if obj_conf > conf_threshold:
-                        dx = torch.sigmoid(predictions[b, anchor_idx, gy, gx, 1]).item()
-                        dy = torch.sigmoid(predictions[b, anchor_idx, gy, gx, 2]).item()
-                        dw = predictions[b, anchor_idx, gy, gx, 3].item()
-                        dh = predictions[b, anchor_idx, gy, gx, 4].item()
-                        
+
+        for scale_idx, pred_scale in enumerate(predictions):
+            num_anchors = anchors.shape[1]
+            H, W = pred_scale.shape[2], pred_scale.shape[3]
+            anchor_scale = anchors[scale_idx].cpu().numpy()
+
+            pred = (
+                pred_scale[b]
+                .view(num_anchors, Config.NUM_CLASSES + 5, H, W)
+                .permute(0, 2, 3, 1)
+                .detach()
+                .cpu()
+                .numpy()
+            )
+
+            for anchor_idx in range(num_anchors):
+                anchor_w, anchor_h = anchor_scale[anchor_idx]
+
+                for gy in range(H):
+                    for gx in range(W):
+                        raw = pred[anchor_idx, gy, gx]
+                        obj_conf = 1.0 / (1.0 + np.exp(-raw[0]))
+
+                        if obj_conf < conf_threshold:
+                            continue
+
+                        class_scores = 1.0 / (1.0 + np.exp(-raw[5:]))
+                        class_idx = int(np.argmax(class_scores))
+                        class_conf = float(class_scores[class_idx])
+                        final_conf = obj_conf * class_conf
+
+                        if final_conf < conf_threshold:
+                            continue
+
+                        dx = 1.0 / (1.0 + np.exp(-raw[1]))
+                        dy = 1.0 / (1.0 + np.exp(-raw[2]))
+                        dw = raw[3]
+                        dh = raw[4]
+
                         cx = (gx + dx) / W
                         cy = (gy + dy) / H
-                        w = Config.ANCHORS[anchor_idx, 0].item() * np.exp(dw)
-                        h = Config.ANCHORS[anchor_idx, 1].item() * np.exp(dh)
-                        
-                        class_scores = torch.sigmoid(predictions[b, anchor_idx, gy, gx, 5:])
-                        class_conf, class_idx = torch.max(class_scores, dim=0)
-                        
-                        final_conf = obj_conf * class_conf.item()
-                        
-                        detections.append({
-                            'box': [cx, cy, w, h],
-                            'class': class_idx.item(),
-                            'score': final_conf
-                        })
-        
-        # Aplicar NMS por clase
+                        w = float(anchor_w * np.exp(dw))
+                        h = float(anchor_h * np.exp(dh))
+
+                        detections.append(
+                            {
+                                "box": [cx, cy, w, h],
+                                "class": class_idx,
+                                "score": final_conf,
+                            }
+                        )
+
         filtered_detections = []
         for class_id in range(Config.NUM_CLASSES):
-            class_dets = [d for d in detections if d['class'] == class_id]
-            
+            class_dets = [d for d in detections if d["class"] == class_id]
             if not class_dets:
                 continue
-            
-            # Ordenar por score descendente
-            class_dets.sort(key=lambda x: x['score'], reverse=True)
-            
+
+            class_dets.sort(key=lambda x: x["score"], reverse=True)
             keep = []
             while class_dets:
                 best = class_dets.pop(0)
                 keep.append(best)
-                
-                # Eliminar detecciones con IoU > threshold
                 class_dets = [
-                    det for det in class_dets
-                    if calculate_iou(best['box'], det['box']) < iou_threshold
+                    det
+                    for det in class_dets
+                    if calculate_iou(best["box"], det["box"]) < iou_threshold
                 ]
-            
+
             filtered_detections.extend(keep)
-        
-        # Convertir a formato estándar
+
         if filtered_detections:
-            boxes = torch.tensor([d['box'] for d in filtered_detections])
-            labels = torch.tensor([d['class'] for d in filtered_detections])
-            scores = torch.tensor([d['score'] for d in filtered_detections])
+            boxes = torch.tensor([d["box"] for d in filtered_detections])
+            labels = torch.tensor([d["class"] for d in filtered_detections])
+            scores = torch.tensor([d["score"] for d in filtered_detections])
         else:
             boxes = torch.zeros((0, 4))
             labels = torch.zeros((0,), dtype=torch.long)
             scores = torch.zeros((0,))
-        
+
         batch_detections.append((boxes, labels, scores))
-    
+
     return batch_detections

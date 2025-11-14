@@ -47,7 +47,7 @@ def train_epoch(model, train_loader, optimizer, criterion, scaler):
         scaler.update()
 
         # Actualizar métricas
-        metrics.update(loss.item(), loss_dict, predictions, target_boxes, target_labels)
+        metrics.update(loss.item(), loss_dict)
         
         # Actualizar barra de progreso
         progress_bar.set_postfix({

@@ -1,6 +1,3 @@
-"""
-Métricas y evaluación del modelo
-"""
 from typing import Iterable, Sequence
 
 import numpy as np

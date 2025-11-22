@@ -10,7 +10,6 @@ from .config import Config
 
 
 class SGSNetLoss(nn.Module):
-    """Pérdida multiescala similar a YOLO para entrenamiento de SGSNet."""
 
     def __init__(self, num_classes: int, anchors: torch.Tensor) -> None:
         super().__init__()

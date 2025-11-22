@@ -20,10 +20,10 @@ class Config:
     NUM_CLASSES = len(CLASS_NAMES)
 
     # Hiperparámetros
-    IMAGE_SIZE = 640
-    BATCH_SIZE = 32
+    IMAGE_SIZE = 416
+    BATCH_SIZE = 16
     EPOCHS = 70
-    LEARNING_RATE = 0.001  # Reducido para mejor convergencia
+    LEARNING_RATE = 0.0015  # Reducido para mejor convergencia
     WEIGHT_DECAY = 0.0005
     EARLY_STOP_PATIENCE = 7
     SAVE_EVERY = 3

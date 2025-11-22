@@ -18,21 +18,25 @@ os.environ.setdefault("CUDA_VISIBLE_DEVICES", "")
 torch.set_num_threads(1)
 Config.DEVICE = torch.device("cpu")
 
-MODEL_PATH = Path("src/data/processed/models/best_model.pth")
-INPUT_DIR = Path("test/data/batch_incoming")
-OUTPUT_DIR = Path("test/data/batch_outputs")
-STAGING_DIR = Path("test/data/batch_outputs_staging")
+MODEL_PATH = Path(os.environ.get("BATCH_MODEL_PATH", "src/data/processed/models/best_model.pth"))
+INPUT_DIR = Path(os.environ.get("BATCH_INPUT_DIR", "test/data/batch_incoming"))
+OUTPUT_DIR = Path(os.environ.get("BATCH_OUTPUT_DIR", "test/data/batch_outputs"))
+DEFAULT_STAGING = OUTPUT_DIR.parent / f"{OUTPUT_DIR.name}_staging"
+STAGING_DIR = Path(os.environ.get("BATCH_STAGING_DIR", str(DEFAULT_STAGING)))
 CSV_FILENAME = "batch_outputs.csv"
 MAX_IMAGES = int(os.environ.get("BATCH_MAX_IMAGES", "150"))
+SPARK_MASTER = os.environ.get("SPARK_MASTER_URL", "local[*]")
 
 _model_cache = {}
 
 def build_session():
-    return (SparkSession.builder
-            .appName("StrawberryBatch")
-            .master("local[*]")
-            .config("spark.sql.execution.arrow.pyspark.enabled", "true")
-            .getOrCreate())
+    return (
+        SparkSession.builder
+        .appName("StrawberryBatch")
+        .master(SPARK_MASTER)
+        .config("spark.sql.execution.arrow.pyspark.enabled", "true")
+        .getOrCreate()
+    )
 
 @F.udf(returnType=T.ArrayType(T.StructType([
     T.StructField("label", T.StringType()),

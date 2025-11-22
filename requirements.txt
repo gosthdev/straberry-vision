@@ -12,4 +12,5 @@ uvicorn[standard]>=0.30.0
 python-multipart>=0.0.9
 pyspark>=3.5.0
 pyarrow>=14.0.0
+watchdog>=4.0.0
 

@@ -142,8 +142,12 @@ class SGSNetLoss(nn.Module):
 
             target_bbox[anchor_idx, gy, gx, 0] = cx * W - gx
             target_bbox[anchor_idx, gy, gx, 1] = cy * H - gy
-            target_bbox[anchor_idx, gy, gx, 2] = torch.log(w / anchor_wh[anchor_idx, 0] + 1e-9)
-            target_bbox[anchor_idx, gy, gx, 3] = torch.log(h / anchor_wh[anchor_idx, 1] + 1e-9)
+            safe_w = torch.clamp(w, min=1e-4)
+            safe_h = torch.clamp(h, min=1e-4)
+            safe_anchor_w = torch.clamp(anchor_wh[anchor_idx, 0], min=1e-4)
+            safe_anchor_h = torch.clamp(anchor_wh[anchor_idx, 1], min=1e-4)
+            target_bbox[anchor_idx, gy, gx, 2] = torch.log(safe_w / safe_anchor_w)
+            target_bbox[anchor_idx, gy, gx, 3] = torch.log(safe_h / safe_anchor_h)
 
             label_idx = int(gt_labels[idx].item())
             if 0 <= label_idx < self.num_classes:

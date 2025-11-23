@@ -32,6 +32,8 @@ def train_epoch(model, train_loader, optimizer, criterion, scaler):
     
     for images, target_boxes, target_labels in progress_bar:
         images = images.to(Config.DEVICE)
+        target_boxes = [b.to(Config.DEVICE) for b in target_boxes]
+        target_labels = [l.to(Config.DEVICE) for l in target_labels]
 
         # Forward pass con mixed precision
         with torch.cuda.amp.autocast():
@@ -51,10 +53,10 @@ def train_epoch(model, train_loader, optimizer, criterion, scaler):
         
         # Actualizar barra de progreso
         progress_bar.set_postfix({
-            'L': f'{loss.item():.3f}',
-            'O': f'{loss_dict["obj"]:.3f}',
-            'B': f'{loss_dict["bbox"]:.3f}',
-            'C': f'{loss_dict["class"]:.3f}'
+            'Loss': f'{loss.item():.3f}',
+            'Obj': f'{loss_dict["obj"]:.3f}',
+            'Bbox': f'{loss_dict["bbox"]:.3f}',
+            'Clas': f'{loss_dict["class"]:.3f}'
         }, refresh=True)
 
     return metrics.get_metrics()
@@ -82,6 +84,8 @@ def validate_epoch(model, val_loader, criterion):
         
         for images, target_boxes, target_labels in progress_bar:
             images = images.to(Config.DEVICE)
+            target_boxes = [b.to(Config.DEVICE) for b in target_boxes]
+            target_labels = [l.to(Config.DEVICE) for l in target_labels]
             predictions = model(images)
             loss, loss_dict = criterion(predictions, target_boxes, target_labels)
 

@@ -21,7 +21,7 @@ class Config:
 
     # Hiperparámetros
     IMAGE_SIZE = 416
-    BATCH_SIZE = 16
+    BATCH_SIZE = 8
     EPOCHS = 70
     LEARNING_RATE = 0.0015  # Reducido para mejor convergencia
     WEIGHT_DECAY = 0.0005

@@ -1,0 +1,14 @@
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.git
+.gitignore
+.vscode
+test/
+# Ignorar archivos subidos localmente para no inflar la imagen
+app/static/uploads/*
+app/static/results/*

@@ -55,3 +55,4 @@ dmypy.json
 
 # Excepciones
 !requirements.txt
+!requirements-web.txt

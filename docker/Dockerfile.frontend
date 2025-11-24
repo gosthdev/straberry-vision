@@ -1,0 +1,20 @@
+FROM nginx:alpine
+
+# Copiar el HTML principal como index.html
+COPY app/pages/app.html /usr/share/nginx/html/index.html
+
+# Copiar los recursos estáticos (JS, CSS, imágenes)
+COPY app/static /usr/share/nginx/html/static
+
+# Copiar script de entrada
+COPY docker/frontend-entrypoint.sh /docker-entrypoint.sh
+
+# Corregir saltos de línea de Windows (CRLF) a Linux (LF) para evitar errores
+RUN sed -i 's/\r$//' /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+
+# Exponer puerto 80
+EXPOSE 80
+
+ENTRYPOINT ["/docker-entrypoint.sh"]
+CMD ["nginx", "-g", "daemon off;"]

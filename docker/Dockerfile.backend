@@ -1,0 +1,28 @@
+# Usar una imagen base de Python ligera
+FROM python:3.10-slim
+
+# Establecer el directorio de trabajo
+WORKDIR /code
+
+# Instalar dependencias del sistema necesarias para OpenCV
+RUN apt-get update && apt-get install -y \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copiar el archivo de requerimientos web e instalar dependencias
+COPY requirements-web.txt .
+RUN pip install --no-cache-dir -r requirements-web.txt
+
+# Copiar el código fuente del núcleo (src) y el archivo principal de la app
+COPY src/ ./src/
+COPY app/main.py ./app/
+
+# Crear directorios para uploads y resultados
+RUN mkdir -p app/static/uploads app/static/results
+
+# Exponer el puerto 8000
+EXPOSE 8000
+
+# Comando para ejecutar la aplicación
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

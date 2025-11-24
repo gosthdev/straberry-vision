@@ -42,19 +42,24 @@ El corazón del sistema es un modelo de red neuronal convolucional (CNN) diseña
 
 ### Opción 1: Despliegue con Docker (Producción)
 
-El proyecto está configurado para desplegarse como dos servicios independientes:
+El proyecto está configurado para desplegarse como dos servicios independientes, cada uno con su propio Dockerfile optimizado:
 
 **1. Backend (API)**
 ```bash
-docker build --target backend -t strawberry-backend .
+# Construir la imagen del backend
+docker build -f docker/Dockerfile.backend -t strawberry-backend .
 
+# Ejecutar el contenedor (Puerto 8000)
 docker run -p 8000:8000 strawberry-backend
 ```
 
 **2. Frontend (Web)**
 ```bash
-docker build --target frontend -t strawberry-frontend .
+# Construir la imagen del frontend
+docker build -f docker/Dockerfile.frontend -t strawberry-frontend .
 
+# Ejecutar conectando al backend (Puerto 80)
+# Reemplaza la URL con la dirección real de tu backend desplegado
 docker run -p 80:80 -e API_URL="http://localhost:8000" strawberry-frontend
 ```
 
@@ -80,7 +85,7 @@ docker run -p 80:80 -e API_URL="http://localhost:8000" strawberry-frontend
     ```
     La aplicación estará disponible en `http://localhost:8000/static/pages/app.html`.
 
-## Estructura del Proyecto
+## 📂 Estructura del Proyecto
 
 ```
 straberry-vision/
@@ -91,7 +96,10 @@ straberry-vision/
 ├── src/
 │   ├── core/              # Definición del modelo (SGSNet), configuración y lógica
 │   └── data/              # Rutas de datos y modelos entrenados (best_model.pth)
-├── docker/                # Scripts de configuración para Docker
-├── Dockerfile             # Definición de imágenes (Multi-stage)
-└── requirements.txt       # Dependencias de Python
+├── docker/                # Dockerfiles y scripts de configuración
+│   ├── Dockerfile.backend
+│   ├── Dockerfile.frontend
+│   └── frontend-entrypoint.sh
+├── requirements.txt       # Dependencias completas (entrenamiento + inferencia)
+└── requirements-web.txt   # Dependencias optimizadas para el backend web
 ```

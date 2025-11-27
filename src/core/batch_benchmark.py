@@ -4,6 +4,12 @@ import sys
 import time
 from pathlib import Path
 import pandas as pd
+import torch
+from pyspark.sql import SparkSession, functions as F, types as T
+from src.core.config import Config
+from src.core.inference import load_model, run_inference_on_image
+import matplotlib.pyplot as plt
+
 
 # Asegurar que la raíz del proyecto esté en sys.path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -27,29 +33,18 @@ if "JAVA_HOME" not in os.environ:
     else:
         print("ADVERTENCIA: No se encontró JAVA_HOME ni instalaciones comunes de Java.")
 
-# Configurar PySpark para usar el mismo Python que está ejecutando este script
-# Esto evita errores con los alias de ejecución de aplicaciones de Windows (Microsoft Store)
 os.environ["PYSPARK_PYTHON"] = sys.executable
 os.environ["PYSPARK_DRIVER_PYTHON"] = sys.executable
 
-# Deshabilitar el daemon de PySpark para evitar problemas de socket en Windows
 os.environ["PYSPARK_NO_DAEMON"] = "true"
 
-import torch
-from pyspark.sql import SparkSession, functions as F, types as T
-from src.core.config import Config
-from src.core.inference import load_model, run_inference_on_image
-
-# Configuración para Benchmark
 BENCHMARK_INPUT_DIR = Path("test/data/benchmark_input")
 BENCHMARK_OUTPUT_DIR = Path("test/data/benchmark_output")
 MODEL_PATH = Path("src/data/processed/models/best_model.pth")
 
-# Configuración de Recursos Spark (Ajustable)
-# Puedes cambiar esto para igualar tu comando spark-submit
 SPARK_CONF = {
-    "master": os.environ.get("SPARK_MASTER", "local[2]"),  # 'local[1]' para 1 core, 'local[*]' para todos
-    "driver_memory": os.environ.get("SPARK_DRIVER_MEMORY", "2g"),
+    "master": os.environ.get("SPARK_MASTER", "local[4]"),  # 'local[1]' para 1 core, 'local[*]' para todos
+    "driver_memory": os.environ.get("SPARK_DRIVER_MEMORY", "4g"),
     "executor_memory": os.environ.get("SPARK_EXECUTOR_MEMORY", "2g"),
 }
 
@@ -176,6 +171,36 @@ def run_sequential_benchmark(image_paths):
     print(f"Secuencial completado en: {duration:.4f} segundos")
     return duration
 
+
+
+def plot_results(seq_time, spark_time, num_images):
+    """Genera un gráfico comparativo de los tiempos de ejecución"""
+    methods = ['Secuencial', 'Spark']
+    times = [seq_time, spark_time]
+    colors = ['#ff9999', '#66b3ff']
+
+    plt.figure(figsize=(10, 6))
+    bars = plt.bar(methods, times, color=colors)
+    
+    # Añadir etiquetas de valor
+    for bar in bars:
+        height = bar.get_height()
+        plt.text(bar.get_x() + bar.get_width()/2., height,
+                f'{height:.2f}s',
+                ha='center', va='bottom')
+
+    plt.title(f'Comparación de Rendimiento: Procesamiento de {num_images} Imágenes')
+    plt.ylabel('Tiempo Total (segundos)')
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+    
+    # Añadir información de velocidad por imagen
+    plt.text(0, seq_time/2, f'{seq_time/num_images:.3f} s/img', ha='center', color='black', fontweight='bold')
+    plt.text(1, spark_time/2, f'{spark_time/num_images:.3f} s/img', ha='center', color='black', fontweight='bold')
+
+    output_path = BENCHMARK_OUTPUT_DIR / "benchmark_comparison.png"
+    plt.savefig(output_path)
+    print(f"\nGráfico guardado en: {output_path}")
+
 def main():
     print("=== BENCHMARK DE RENDIMIENTO: SPARK vs SECUENCIAL ===")
     image_paths = setup_data()
@@ -204,6 +229,9 @@ def main():
         slowdown = spark_time / seq_time
         print(f"CONCLUSIÓN: Spark fue {slowdown:.2f}x más LENTO.")
         print("Nota: Spark tiene un overhead de inicio alto. Para pocas imágenes, es normal que sea más lento.")
+
+    # Generar gráfico
+    plot_results(seq_time, spark_time, len(image_paths))
 
 if __name__ == "__main__":
     main()

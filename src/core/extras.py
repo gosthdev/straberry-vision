@@ -194,8 +194,8 @@ def visualize_predictions(model, val_loader, epoch, save_path):
         # Aplicar NMS
         batch_detections = non_max_suppression(
             predictions,
-            conf_threshold=0.3,
-            iou_threshold=0.4
+            conf_threshold=Config.CONF_THRESHOLD,
+            iou_threshold=Config.IOU_THRESHOLD,
         )
         
         num_display = min(4, images.shape[0])

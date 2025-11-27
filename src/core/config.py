@@ -23,7 +23,7 @@ class Config:
     IMAGE_SIZE = 416
     BATCH_SIZE = 8
     EPOCHS = 70
-    LEARNING_RATE = 0.0015  # Reducido para mejor convergencia
+    LEARNING_RATE = 0.001
     WEIGHT_DECAY = 0.0005
     EARLY_STOP_PATIENCE = 7
     SAVE_EVERY = 3

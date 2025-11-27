@@ -91,18 +91,27 @@ class SGSNetLoss(nn.Module):
             if gt_boxes.numel() > 0:
                 self._assign_targets(gt_boxes, gt_labels, anchors, target_obj, target_bbox, target_cls, obj_mask, H, W)
 
-            pos_weight = (obj_mask == 0).sum() / (obj_mask.sum() + 1e-9)
+            # Calcular peso para balancear clases (fondo vs objeto)
+            # Limitamos el peso máximo para evitar inestabilidad numérica cuando hay pocos objetos
+            num_pos = obj_mask.sum()
+            num_neg = (obj_mask == 0).sum()
+            pos_weight = num_neg / (num_pos + 1e-6)
+            pos_weight = torch.clamp(pos_weight, max=50.0)  # Limitar peso máximo
+            
+            # Loss de objetividad con peso
             obj_loss = self.bce_obj(pred_obj[b], target_obj)
             obj_loss = torch.where(obj_mask > 0, obj_loss * pos_weight, obj_loss)
             obj_losses.append(obj_loss.mean())
 
-            if obj_mask.sum() > 0:
+            if num_pos > 0:
                 pos_mask = obj_mask > 0
+                # Loss de bounding box (solo para objetos)
                 bbox_loss = self.mse_box(pred_bbox[b][pos_mask], target_bbox[pos_mask]).mean()
+                # Loss de clasificación (solo para objetos)
                 cls_loss = self.bce_cls(pred_cls[b][pos_mask], target_cls[pos_mask]).mean()
             else:
-                bbox_loss = torch.zeros((), device=device)
-                cls_loss = torch.zeros((), device=device)
+                bbox_loss = torch.tensor(0.0, device=device)
+                cls_loss = torch.tensor(0.0, device=device)
 
             bbox_losses.append(bbox_loss)
             cls_losses.append(cls_loss)
@@ -124,7 +133,10 @@ class SGSNetLoss(nn.Module):
         device = target_obj.device
         num_anchors = anchors.shape[0]
 
-        gt_boxes = gt_boxes.clamp_(min=1e-4, max=1 - 1e-4)
+        # Clonar y asegurar rangos válidos para evitar errores numéricos
+        gt_boxes = gt_boxes.clone()
+        gt_boxes = torch.clamp(gt_boxes, min=1e-4, max=1.0 - 1e-4)
+        
         anchor_wh = anchors.to(device)
 
         wh = gt_boxes[:, 2:4]
@@ -142,10 +154,13 @@ class SGSNetLoss(nn.Module):
 
             target_bbox[anchor_idx, gy, gx, 0] = cx * W - gx
             target_bbox[anchor_idx, gy, gx, 1] = cy * H - gy
-            safe_w = torch.clamp(w, min=1e-4)
-            safe_h = torch.clamp(h, min=1e-4)
-            safe_anchor_w = torch.clamp(anchor_wh[anchor_idx, 0], min=1e-4)
-            safe_anchor_h = torch.clamp(anchor_wh[anchor_idx, 1], min=1e-4)
+            
+            # Estabilidad numérica para logaritmos
+            safe_w = torch.clamp(w, min=1e-6)
+            safe_h = torch.clamp(h, min=1e-6)
+            safe_anchor_w = torch.clamp(anchor_wh[anchor_idx, 0], min=1e-6)
+            safe_anchor_h = torch.clamp(anchor_wh[anchor_idx, 1], min=1e-6)
+            
             target_bbox[anchor_idx, gy, gx, 2] = torch.log(safe_w / safe_anchor_w)
             target_bbox[anchor_idx, gy, gx, 3] = torch.log(safe_h / safe_anchor_h)
 

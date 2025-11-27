@@ -51,10 +51,10 @@ def train_epoch(model, train_loader, optimizer, criterion, scaler):
         
         # Actualizar barra de progreso
         progress_bar.set_postfix({
-            'L': f'{loss.item():.3f}',
-            'O': f'{loss_dict["obj"]:.3f}',
-            'B': f'{loss_dict["bbox"]:.3f}',
-            'C': f'{loss_dict["class"]:.3f}'
+            'Loss': f'{loss.item():.3f}',
+            'Obj': f'{loss_dict["obj"]:.3f}',
+            'Bbox': f'{loss_dict["bbox"]:.3f}',
+            'Class': f'{loss_dict["class"]:.3f}'
         }, refresh=True)
 
     return metrics.get_metrics()

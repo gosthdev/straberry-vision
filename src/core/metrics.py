@@ -46,8 +46,8 @@ class Metrics:
             # Aplicar NMS antes de calcular métricas
             batch_detections = non_max_suppression(
                 predictions, 
-                conf_threshold=0.3,
-                iou_threshold=0.4
+                conf_threshold=Config.CONF_THRESHOLD,
+                iou_threshold=Config.IOU_THRESHOLD
             )
             
             for batch_idx in range(len(target_boxes)):

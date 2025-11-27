@@ -118,9 +118,15 @@ def get_transforms():
     """
     train_transform = A.Compose([
         A.HorizontalFlip(p=0.5),
-        A.Rotate(limit=15, p=0.3),
-        A.RandomBrightnessContrast(p=0.5),
-        A.HueSaturationValue(p=0.5),
+        A.VerticalFlip(p=0.3),
+        A.Rotate(limit=30, p=0.5),
+        A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=0.5),
+        A.HueSaturationValue(hue_shift_limit=20, sat_shift_limit=30, val_shift_limit=20, p=0.5),
+        A.OneOf([
+            A.GaussNoise(p=0.2),
+            A.GaussianBlur(p=0.2),
+            A.MotionBlur(p=0.2),
+        ], p=0.3),
         A.Resize(Config.IMAGE_SIZE, Config.IMAGE_SIZE),
         A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ToTensorV2(),

@@ -16,16 +16,14 @@ class Config:
     NUM_CLASSES = len(CLASS_NAMES)
 
     # Hiperparámetros
-    IMAGE_SIZE = 416
+    IMAGE_SIZE = 512
     BATCH_SIZE = 8
     EPOCHS = 70
-    LEARNING_RATE = 0.001  # Reducido para mejor convergencia
+    LEARNING_RATE = 0.001 
     WEIGHT_DECAY = 0.0005
-    EARLY_STOP_PATIENCE = 10
+    EARLY_STOP_PATIENCE = 20
     SAVE_EVERY = 5
 
-    # Anchors definidos explícitamente (pequeño, mediano, grande)
-    # Basados en análisis típico de fresas en imágenes
     ANCHORS = torch.tensor([
         [0.05, 0.05],  # Anchor pequeño
         [0.10, 0.10],  # Anchor mediano
@@ -33,8 +31,8 @@ class Config:
     ])
 
     # Thresholds
-    CONF_THRESHOLD = 0.3
-    IOU_THRESHOLD = 0.4
+    CONF_THRESHOLD = 0.5
+    IOU_THRESHOLD = 0.45
 
     # Device
     DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')

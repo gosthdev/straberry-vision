@@ -21,6 +21,7 @@ warnings.filterwarnings('ignore')
 
 # Importar módulos propios
 from .config import Config
+from .metrics import non_max_suppression
 from .architecture import SGSNet
 from .dataset import load_data, create_dataloaders
 from .loss import SGSNetLoss
@@ -33,6 +34,7 @@ from .extras import (
     save_training_history
 )
 from .inference import test_model_on_image, test_model_on_folder
+from src.utils.anchors import calculate_optimal_anchors
 
 
 # ============================================================================
@@ -58,6 +60,11 @@ def train_sgsnet(resume_from_checkpoint=None):
 
     # Cargar datos
     coco_data, train_ids, val_ids, test_ids = load_data()
+    
+    # Calcular anchors dinámicos basados en el dataset de entrenamiento
+    # Esto asegura que los anchors se ajusten a la distribución real de tamaños de fresas
+    Config.ANCHORS = calculate_optimal_anchors(coco_data, train_ids)
+    
     train_loader, val_loader, test_loader = create_dataloaders(
         coco_data, train_ids, val_ids, test_ids
     )
@@ -141,16 +148,16 @@ def main(resume=True):
     Args:
         resume: Si True, intenta resumir desde el último checkpoint
     """
-    print("\n🍓 STRAWBERRY MATURITY DETECTION - SGSNET")
+    print("\nSTRAWBERRY MATURITY DETECTION - SGSNET")
     print("="*60)
 
     # Verificar rutas
     if not os.path.exists(Config.IMAGES_PATH):
-        print(f"❌ Imágenes no encontradas: {Config.IMAGES_PATH}")
+        print(f"Imágenes no encontradas: {Config.IMAGES_PATH}")
         return
 
     if not os.path.exists(Config.ANNOTATIONS_PATH):
-        print(f"❌ Anotaciones no encontradas: {Config.ANNOTATIONS_PATH}")
+        print(f"Anotaciones no encontradas: {Config.ANNOTATIONS_PATH}")
         return
 
     print(f"✓ Configuración verificada")

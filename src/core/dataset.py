@@ -159,14 +159,14 @@ def load_data():
     with open(Config.ANNOTATIONS_PATH, 'r') as f:
         coco_data = json.load(f)
 
-    print(f"✓ Imágenes: {len(coco_data['images'])}")
-    print(f"✓ Anotaciones: {len(coco_data['annotations'])}")
+    print(f" Imágenes: {len(coco_data['images'])}")
+    print(f" Anotaciones: {len(coco_data['annotations'])}")
 
     image_ids = [img['id'] for img in coco_data['images']]
     train_ids, temp_ids = train_test_split(image_ids, test_size=0.3, random_state=42)
     val_ids, test_ids = train_test_split(temp_ids, test_size=0.5, random_state=42)
 
-    print(f"✓ Train: {len(train_ids)} | Val: {len(val_ids)} | Test: {len(test_ids)}")
+    print(f" Train: {len(train_ids)} | Val: {len(val_ids)} | Test: {len(test_ids)}")
     return coco_data, train_ids, val_ids, test_ids
 
 

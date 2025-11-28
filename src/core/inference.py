@@ -40,7 +40,7 @@ def test_model_on_image(model_path, image_path, conf_threshold=0.2, save_output=
     checkpoint = torch.load(model_path, map_location=Config.DEVICE, weights_only=False)
     model.load_state_dict(checkpoint['model_state_dict'])
     model.eval()
-    print("✓ Modelo cargado exitosamente")
+    print(" Modelo cargado exitosamente")
 
     # 2. Cargar imagen original
     print(f"\n[2/5] Cargando imagen: {image_path}")
@@ -54,7 +54,7 @@ def test_model_on_image(model_path, image_path, conf_threshold=0.2, save_output=
         return None
 
     orig_h, orig_w = original_image.shape[:2]
-    print(f"✓ Dimensiones originales: {orig_w}x{orig_h} pixels")
+    print(f" Dimensiones originales: {orig_w}x{orig_h} pixels")
 
     # Convertir BGR a RGB
     image_rgb = cv2.cvtColor(original_image, cv2.COLOR_BGR2RGB)
@@ -67,7 +67,7 @@ def test_model_on_image(model_path, image_path, conf_threshold=0.2, save_output=
     _, val_transform = get_transforms()
     transformed = val_transform(image=image_rgb, bboxes=[], class_labels=[])
     image_tensor = transformed['image'].unsqueeze(0).to(Config.DEVICE)
-    print(f"✓ Tensor shape: {image_tensor.shape}")
+    print(f" Tensor shape: {image_tensor.shape}")
 
     # 4. Inferencia
     print(f"\n[4/5] Ejecutando inferencia...")
@@ -76,7 +76,7 @@ def test_model_on_image(model_path, image_path, conf_threshold=0.2, save_output=
 
     # Procesar predicciones
     detections = extract_detections(predictions, conf_threshold)
-    print(f"✓ Detecciones encontradas: {len(detections)}")
+    print(f" Detecciones encontradas: {len(detections)}")
 
     # Mostrar estadísticas
     B, C, H, W = predictions.shape

@@ -713,11 +713,11 @@ def save_checkpoint(epoch, model, optimizer, scheduler, early_stopping,
     if is_best:
         best_path = Config.OUTPUT_PATH + '/best_model.pth'
         torch.save(checkpoint, best_path)
-        print(f"✓ Mejor modelo guardado: {best_path}")
+        print(f" Mejor modelo guardado: {best_path}")
     else:
         checkpoint_path = Config.OUTPUT_PATH + f'/checkpoint_epoch_{epoch}.pth'
         torch.save(checkpoint, checkpoint_path)
-        print(f"✓ Checkpoint guardado: {checkpoint_path}")
+        print(f" Checkpoint guardado: {checkpoint_path}")
 
 def load_checkpoint(checkpoint_path, model, optimizer=None, scheduler=None):
     if not os.path.exists(checkpoint_path):
@@ -728,7 +728,7 @@ def load_checkpoint(checkpoint_path, model, optimizer=None, scheduler=None):
     checkpoint = torch.load(checkpoint_path, map_location=Config.DEVICE, weights_only=False)
 
     model.load_state_dict(checkpoint['model_state_dict'])
-    print(f"✓ Modelo restaurado desde época {checkpoint['epoch']}")
+    print(f" Modelo restaurado desde época {checkpoint['epoch']}")
 
     if optimizer and 'optimizer_state_dict' in checkpoint:
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
@@ -767,14 +767,14 @@ def load_data():
     with open(Config.ANNOTATIONS_PATH, 'r') as f:
         coco_data = json.load(f)
 
-    print(f"✓ Imágenes: {len(coco_data['images'])}")
-    print(f"✓ Anotaciones: {len(coco_data['annotations'])}")
+    print(f" Imágenes: {len(coco_data['images'])}")
+    print(f" Anotaciones: {len(coco_data['annotations'])}")
 
     image_ids = [img['id'] for img in coco_data['images']]
     train_ids, temp_ids = train_test_split(image_ids, test_size=0.3, random_state=42)
     val_ids, test_ids = train_test_split(temp_ids, test_size=0.5, random_state=42)
 
-    print(f"✓ Train: {len(train_ids)} | Val: {len(val_ids)} | Test: {len(test_ids)}")
+    print(f" Train: {len(train_ids)} | Val: {len(val_ids)} | Test: {len(test_ids)}")
     return coco_data, train_ids, val_ids, test_ids
 
 def create_dataloaders(coco_data, train_ids, val_ids, test_ids):
@@ -809,7 +809,7 @@ def train_sgsnet(resume_from_checkpoint=None):
 
     # Modelo
     model = SGSNet(Config.NUM_CLASSES).to(Config.DEVICE)
-    print(f"✓ Modelo creado (parámetros: {sum(p.numel() for p in model.parameters())/1e6:.2f}M)\n")
+    print(f" Modelo creado (parámetros: {sum(p.numel() for p in model.parameters())/1e6:.2f}M)\n")
 
     # Optimizador y pérdida
     optimizer = optim.AdamW(model.parameters(), lr=Config.LEARNING_RATE, weight_decay=Config.WEIGHT_DECAY)
@@ -848,7 +848,7 @@ def train_sgsnet(resume_from_checkpoint=None):
             if es_state:
                 early_stopping.counter = es_state['counter']
                 early_stopping.best_loss = es_state['best_loss']
-            print(f"✓ Reanudando desde época {start_epoch}\n")
+            print(f" Reanudando desde época {start_epoch}\n")
 
     print(f"Entrenando hasta época {Config.EPOCHS}...\n")
     start_time = time.time()
@@ -936,8 +936,8 @@ def train_sgsnet(resume_from_checkpoint=None):
 
     # Guardar resultados
     total_time = time.time() - start_time
-    print(f"\n✓ Entrenamiento completado en {total_time/60:.1f} minutos")
-    print(f"✓ Mejor val_loss: {best_val_loss:.4f}")
+    print(f"\n Entrenamiento completado en {total_time/60:.1f} minutos")
+    print(f" Mejor val_loss: {best_val_loss:.4f}")
 
     with open(Config.OUTPUT_PATH + '/training_history.json', 'w') as f:
         json.dump(history, f, indent=2)
@@ -1029,7 +1029,7 @@ def test_model_on_image(model_path, image_path, conf_threshold=0.2, save_output=
     checkpoint = torch.load(model_path, map_location=Config.DEVICE, weights_only=False)
     model.load_state_dict(checkpoint['model_state_dict'])
     model.eval()
-    print("✓ Modelo cargado exitosamente")
+    print(" Modelo cargado exitosamente")
 
     # 2. CARGAR IMAGEN ORIGINAL
     print(f"\n[2/5] Cargando imagen: {image_path}")
@@ -1043,7 +1043,7 @@ def test_model_on_image(model_path, image_path, conf_threshold=0.2, save_output=
         return None
 
     orig_h, orig_w = original_image.shape[:2]
-    print(f"✓ Dimensiones originales: {orig_w}x{orig_h} pixels")
+    print(f" Dimensiones originales: {orig_w}x{orig_h} pixels")
 
     # Convertir BGR (OpenCV) a RGB
     image_rgb = cv2.cvtColor(original_image, cv2.COLOR_BGR2RGB)
@@ -1061,7 +1061,7 @@ def test_model_on_image(model_path, image_path, conf_threshold=0.2, save_output=
     transformed = val_transform(image=image_rgb, bboxes=[], class_labels=[])
     image_tensor = transformed['image'].unsqueeze(0).to(Config.DEVICE)
 
-    print(f"✓ Tensor shape: {image_tensor.shape}")
+    print(f" Tensor shape: {image_tensor.shape}")
 
     # 4. INFERENCIA
     print(f"\n[4/5] Ejecutando inferencia...")
@@ -1111,7 +1111,7 @@ def test_model_on_image(model_path, image_path, conf_threshold=0.2, save_output=
                         'class_name': Config.CLASS_NAMES[class_idx.item()]
                     })
 
-    print(f"✓ Detecciones encontradas: {len(detections)}")
+    print(f" Detecciones encontradas: {len(detections)}")
 
     # Métricas
     max_conf = obj_scores.max().item()
@@ -1189,7 +1189,7 @@ def test_model_on_image(model_path, image_path, conf_threshold=0.2, save_output=
     if save_output:
         output_path = image_path.replace('.jpg', '_detections.jpg').replace('.png', '_detections.png')
         plt.savefig(output_path, dpi=150, bbox_inches='tight')
-        print(f"✓ Imagen guardada: {output_path}")
+        print(f" Imagen guardada: {output_path}")
     """
 
     plt.show()
@@ -1269,7 +1269,7 @@ def main(resume=True):
         print(f"❌ Anotaciones no encontradas: {Config.ANNOTATIONS_PATH}")
         return
 
-    print(f"✓ Configuración verificada")
+    print(f" Configuración verificada")
     print(f"  Imágenes: {Config.IMAGES_PATH}")
     print(f"  Anotaciones: {Config.ANNOTATIONS_PATH}")
     print(f"  Salida: {Config.OUTPUT_PATH}")
@@ -1279,8 +1279,8 @@ def main(resume=True):
     model = train_sgsnet(resume_from_checkpoint=checkpoint_to_resume)
 
     print("\n" + "="*60)
-    print("✓ ENTRENAMIENTO COMPLETADO")
-    print(f"✓ Modelos guardados en: {Config.OUTPUT_PATH}")
+    print(" ENTRENAMIENTO COMPLETADO")
+    print(f" Modelos guardados en: {Config.OUTPUT_PATH}")
     print("="*60)
 
 if __name__ == "__main__":

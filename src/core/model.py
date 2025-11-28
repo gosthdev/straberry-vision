@@ -1,7 +1,4 @@
 """
-SGSNet para Detección de Estados de Madurez de Fresas
-Versión Modularizada
-
 Este archivo sirve como punto de entrada principal para entrenar e inferir el modelo.
 La implementación está dividida en módulos especializados:
     - config.py: Configuración del modelo
@@ -35,9 +32,6 @@ from .extras import (
 from .inference import test_model_on_image, test_model_on_folder
 
 
-# ============================================================================
-# FUNCIÓN PRINCIPAL DE ENTRENAMIENTO
-# ============================================================================
 def train_sgsnet(resume_from_checkpoint=None):
     """
     Función principal para entrenar el modelo SGSNet
@@ -64,7 +58,7 @@ def train_sgsnet(resume_from_checkpoint=None):
 
     # Crear modelo
     model = SGSNet(Config.NUM_CLASSES).to(Config.DEVICE)
-    print(f"✓ Modelo creado (parámetros: {sum(p.numel() for p in model.parameters())/1e6:.2f}M)\n")
+    print(f" Modelo creado (parámetros: {sum(p.numel() for p in model.parameters())/1e6:.2f}M)\n")
 
     # Optimizador, pérdida y scheduler
     optimizer = optim.AdamW(
@@ -101,7 +95,7 @@ def train_sgsnet(resume_from_checkpoint=None):
             if es_state:
                 early_stopping.counter = es_state['counter']
                 early_stopping.best_loss = es_state['best_loss']
-            print(f"✓ Reanudando desde época {start_epoch}\n")
+            print(f" Reanudando desde época {start_epoch}\n")
 
     # Entrenar modelo
     model, history = train_model(
@@ -124,16 +118,13 @@ def train_sgsnet(resume_from_checkpoint=None):
     plot_training_curves(history)
 
     print("\n" + "="*60)
-    print("✓ ENTRENAMIENTO COMPLETADO")
-    print(f"✓ Modelos guardados en: {Config.OUTPUT_PATH}")
+    print(" ENTRENAMIENTO COMPLETADO")
+    print(f" Modelos guardados en: {Config.OUTPUT_PATH}")
     print("="*60)
     
     return model
 
 
-# ============================================================================
-# MAIN
-# ============================================================================
 def main(resume=True):
     """
     Función principal del script
@@ -153,7 +144,7 @@ def main(resume=True):
         print(f"❌ Anotaciones no encontradas: {Config.ANNOTATIONS_PATH}")
         return
 
-    print(f"✓ Configuración verificada")
+    print(f" Configuración verificada")
     print(f"  Imágenes: {Config.IMAGES_PATH}")
     print(f"  Anotaciones: {Config.ANNOTATIONS_PATH}")
     print(f"  Salida: {Config.OUTPUT_PATH}")

@@ -176,7 +176,7 @@ def train_model(model, train_loader, val_loader, test_loader,
         is_best = val_metrics['loss'] < best_val_loss
         if is_best:
             best_val_loss = val_metrics['loss']
-            print(f"\n🎯 NUEVO MEJOR MODELO (val_loss: {best_val_loss:.4f})")
+            print(f"\n NUEVO MEJOR MODELO (val_loss: {best_val_loss:.4f})")
             save_checkpoint(epoch, model, optimizer, scheduler, early_stopping,
                           train_metrics, val_metrics, history, is_best=True)
         
@@ -186,7 +186,7 @@ def train_model(model, train_loader, val_loader, test_loader,
 
         # Early stopping
         if early_stopping(val_metrics['loss']):
-            print(f"\n⚠️  Early stopping activado en época {epoch}")
+            print(f"\n  Early stopping activado en época {epoch}")
             save_checkpoint(epoch, model, optimizer, scheduler, early_stopping,
                           train_metrics, val_metrics, history, is_best=False)
             break
@@ -199,8 +199,8 @@ def train_model(model, train_loader, val_loader, test_loader,
     print_test_summary(test_metrics)
 
     total_time = time.time() - start_time
-    print(f"\n✓ Entrenamiento completado en {total_time/60:.1f} minutos")
-    print(f"✓ Mejor val_loss: {best_val_loss:.4f}")
+    print(f"\n Entrenamiento completado en {total_time/60:.1f} minutos")
+    print(f" Mejor val_loss: {best_val_loss:.4f}")
     
     return model, history
 

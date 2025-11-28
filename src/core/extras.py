@@ -81,11 +81,11 @@ def save_checkpoint(epoch, model, optimizer, scheduler, early_stopping,
     if is_best:
         best_path = Config.OUTPUT_PATH + '/best_model.pth'
         torch.save(checkpoint, best_path)
-        print(f"✓ Mejor modelo guardado: {best_path}")
+        print(f" Mejor modelo guardado: {best_path}")
     else:
         checkpoint_path = Config.OUTPUT_PATH + f'/checkpoint_epoch_{epoch}.pth'
         torch.save(checkpoint, checkpoint_path)
-        print(f"✓ Checkpoint guardado: {checkpoint_path}")
+        print(f" Checkpoint guardado: {checkpoint_path}")
 
 
 def load_checkpoint(checkpoint_path, model, optimizer=None, scheduler=None):
@@ -111,7 +111,7 @@ def load_checkpoint(checkpoint_path, model, optimizer=None, scheduler=None):
     checkpoint = torch.load(checkpoint_path, map_location=Config.DEVICE, weights_only=False)
 
     model.load_state_dict(checkpoint['model_state_dict'])
-    print(f"✓ Modelo restaurado desde época {checkpoint['epoch']}")
+    print(f" Modelo restaurado desde época {checkpoint['epoch']}")
 
     if optimizer and 'optimizer_state_dict' in checkpoint:
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
@@ -332,4 +332,4 @@ def save_training_history(history):
     """
     with open(Config.OUTPUT_PATH + '/training_history.json', 'w') as f:
         json.dump(history, f, indent=2)
-    print(f"✓ Historial guardado: {Config.OUTPUT_PATH}/training_history.json")
+    print(f" Historial guardado: {Config.OUTPUT_PATH}/training_history.json")

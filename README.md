@@ -2,6 +2,9 @@
 
 Sistema de visión artificial para la detección y clasificación automática de fresas según su estado de madurez. Este proyecto implementa una arquitectura de Deep Learning personalizada (SGSNet) accesible a través de una interfaz web moderna y fácil de usar.
 
+## Dataset
+https://www.kaggle.com/datasets/kotameyan/strawberry-growth-stage-datasets
+
 ## Características Principales
 
 - **Detección Precisa**: Identifica múltiples fresas en una sola imagen.

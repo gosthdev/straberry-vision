@@ -1,3 +1,0 @@
-[build]
-  command = "mkdir -p dist && cp app/pages/app.html dist/index.html && cp -r app/static dist/static && echo \"window.APP_CONFIG = { API_URL: '$API_URL' };\" > dist/static/js/config.js"
-  publish = "dist"

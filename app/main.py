@@ -7,7 +7,7 @@ import uuid
 
 from fastapi import FastAPI, File, UploadFile, HTTPException, Body
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 import uvicorn
 import cv2
 import numpy as np
@@ -25,7 +25,12 @@ app = FastAPI()
 # Configurar CORS para permitir peticiones desde el frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # En producción, cambia esto por la URL específica de tu frontend
+    allow_origins=[
+        "https://strawberry-vision.netlify.app",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+    ],
+    allow_origin_regex=r"https://.*\.ngrok-free\.app",  # Permite cualquier subdominio de ngrok
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -40,8 +45,7 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
 
-# Mount static files
-app.mount("/static", StaticFiles(directory="app/static"), name="static")
+# Mount static files (solo para servir imágenes procesadas)
 app.mount("/uploads", StaticFiles(directory="app/static/uploads"), name="uploads")
 app.mount("/results", StaticFiles(directory="app/static/results"), name="results")
 
@@ -170,10 +174,20 @@ class ModelService:
 
 model_service = ModelService()
 
+
 @app.get("/")
-async def read_index():
-    with open("app/pages/app.html", "r", encoding="utf-8") as f:
-        return HTMLResponse(content=f.read(), headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
+async def health_check():
+    """Health endpoint for backend-only deployments."""
+    return {"status": "ok", "message": "Strawberry Vision API is running"}
+
+
+# Serve a small dynamic config.js so clients requesting /static/js/config.js get a valid file
+# API URL is taken from env var `API_PUBLIC_URL` (set this to your ngrok or public URL)
+@app.get("/static/js/config.js")
+async def serve_config_js():
+    api_url = os.environ.get("API_PUBLIC_URL", "")
+    js = f"window.APP_CONFIG = {{\n    API_URL: \"{api_url}\"\n}};\n"
+    return Response(content=js, media_type="application/javascript")
 
 @app.post("/upload")
 async def upload_files(files: List[UploadFile] = File(...)):

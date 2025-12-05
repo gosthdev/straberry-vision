@@ -115,22 +115,29 @@ class DebouncedTrigger(FileSystemEventHandler):
             )
 
 
-def build_default_command(project_root: Path, args: argparse.Namespace) -> List[str]:
+def build_default_command(project_root: Path, args: argparse.Namespace) -> list:
+    # FIJAR RUTA CORRECTA DE SPARK Y PYTHON
     spark_submit = args.spark_submit or os.environ.get("SPARK_SUBMIT_CMD", "spark-submit")
     master_url = args.master or os.environ.get("SPARK_MASTER_URL", "local[*]")
     extra_args = args.extra_args or os.environ.get("SPARK_SUBMIT_ARGS", "")
+    
+    # RUTA CORRECTA: src/core/batch.py (NO src/src/core/batch.py)
     app_path = args.app or project_root / "src" / "core" / "batch.py"
 
     command = [spark_submit, "--master", master_url]
+    
+    # Configurar Python correctamente
+    python_exe = sys.executable
+    command.extend([
+        "--conf", f"spark.executorEnv.PYSPARK_PYTHON={python_exe}",
+        "--conf", f"spark.executorEnv.PYSPARK_DRIVER_PYTHON={python_exe}",
+        "--conf", "spark.driver.memory=2g",
+        "--conf", "spark.executor.memory=1g",
+    ])
+    
     if extra_args:
         command.extend(shlex.split(extra_args))
-    if args.executor_python and not any(
-        "spark.executorEnv.PYSPARK_PYTHON" in token for token in command
-    ):
-        command.extend([
-            "--conf",
-            f"spark.executorEnv.PYSPARK_PYTHON={args.executor_python}",
-        ])
+    
     command.append(str(app_path))
     return command
 

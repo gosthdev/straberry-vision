@@ -48,6 +48,17 @@
     </div>
 </div>
 
+<div style="margin-top: 2rem; padding: 1rem; background: #f0fdf4; border-radius: 0.5rem; border-left: 4px solid var(--primary-green);">
+    <h3 style="margin: 0 0 0.5rem;">📊 Descargar Resultados Parquet</h3>
+    <p style="color: var(--text-secondary); margin: 0 0 1rem;">
+        Si el lote fue procesado con PySpark, puedes descargar los resultados completos en formato Parquet.
+    </p>
+    <button id="download-parquet-btn" class="sv-btn sv-btn-success">
+        <i class="fas fa-download"></i> Descargar .parquet
+    </button>
+</div>
+
+
 <!-- Galería de imágenes procesadas -->
 <section class="sv-results-section">
     <h2>Resultados por Imagen</h2>
@@ -182,6 +193,8 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
+
+    
     // Crear leyenda
     Object.entries(classCounts).forEach(([cls, count]) => {
         const item = document.createElement("div");
@@ -239,6 +252,19 @@ document.addEventListener("DOMContentLoaded", () => {
         
         gallery.appendChild(item);
     });
+    
+    document.getElementById("download-parquet-btn").addEventListener("click", () => {
+        const batchData = JSON.parse(localStorage.getItem("sv_current_batch") || "{}");
+        
+        if (!batchData.download_url) {
+            alert("No hay URL de descarga disponible para este lote");
+            return;
+        }
+
+        // Descargar archivo
+        window.location.href = batchData.download_url;
+    });
+
 });
 </script>
 {% endblock %}

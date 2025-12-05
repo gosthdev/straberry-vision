@@ -149,67 +149,65 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // Procesar archivos uno por uno
-    async function startProcessing() {
-        if (isProcessing) return;
+   async function startProcessing() {
+    if (isProcessing) return;
+    
+    isProcessing = true;
+    abortController = new AbortController();
+    viewResultsBtn.disabled = true;
+
+    // Recolectar datos
+    const loteId = document.getElementById("lote-id")?.value || `LOTE-${Date.now()}`;
+    const location = document.getElementById("location")?.value || "";
+    const description = document.getElementById("description")?.value || "";
+
+    const formData = new FormData();
+    formData.append("lote_id", loteId);
+    formData.append("location", location);
+    formData.append("description", description);
+
+    selectedFiles.forEach(f => formData.append("files", f));
+
+    try {
+        // ENVIAR Y ESPERAR RESULTADO (SIN POLLING)
+        console.log("Enviando lote para procesamiento...");
         
-        isProcessing = true;
-        abortController = new AbortController();
-        viewResultsBtn.disabled = true;
+        const response = await fetch("/predict-batch", {
+            method: "POST",
+            body: formData,
+            signal: abortController.signal,
+            timeout: 330000  // 5.5 minutos
+        });
 
-        for (let i = 0; i < selectedFiles.length; i++) {
-            if (abortController.signal.aborted) break;
-            
-            const file = selectedFiles[i];
-            updateFileStatus(file.name, 'processing', 0);
-            
-            try {
-                // Simular progreso durante la carga
-                let progress = 0;
-                const progressInterval = setInterval(() => {
-                    progress = Math.min(progress + 20, 80);
-                    updateFileStatus(file.name, 'processing', progress);
-                }, 200);
-
-                const formData = new FormData();
-                formData.append("file", file);
-
-                const response = await fetch("/predict", {
-                    method: "POST",
-                    body: formData,
-                    signal: abortController.signal
-                });
-
-                clearInterval(progressInterval);
-
-                if (!response.ok) {
-                    throw new Error(`Error HTTP ${response.status}`);
-                }
-
-                const result = await response.json();
-                result.filename = file.name;
-                batchResults.push(result);
-
-                updateFileStatus(file.name, 'completed', 100);
-
-            } catch (err) {
-                if (err.name === 'AbortError') {
-                    updateFileStatus(file.name, 'pending', 0);
-                } else {
-                    console.error(`Error procesando ${file.name}:`, err);
-                    updateFileStatus(file.name, 'error', 0);
-                    batchResults.push({ filename: file.name, error: err.message });
-                }
-            }
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || `HTTP ${response.status}`);
         }
 
+        const data = await response.json();
+        console.log("Procesamiento completado:", data);
+
+        // Guardar en localStorage
+        localStorage.setItem("sv_current_batch", JSON.stringify(data));
+
+        // Ir a resultados
+        setTimeout(() => {
+            window.location.href = "/results";
+        }, 1000);
+
+    } catch (err) {
         isProcessing = false;
+        hideElement(uploadSection);
+        showElement(progressContainer);
         
-        // Habilitar botón de ver resultados
-        const hasResults = batchResults.some(r => !r.error);
-        if (hasResults) {
-            viewResultsBtn.disabled = false;
-        }
+        const errorMsg = err.name === 'AbortError' 
+            ? 'Solicitud cancelada'
+            : err.message;
+        
+        alert(`Error: ${errorMsg}`);
+        console.error(err);
     }
+}
 
     // Cancelar procesamiento
     function cancelProcessing() {

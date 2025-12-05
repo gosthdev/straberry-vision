@@ -46,7 +46,9 @@ from .extras import (
 # Inferencia
 from .inference import (
     test_model_on_image,
-    test_model_on_folder
+    test_model_on_folder,
+    load_model,
+    run_inference_on_image
 )
 
 # Función principal
@@ -90,6 +92,8 @@ __all__ = [
     # Inferencia
     'test_model_on_image',
     'test_model_on_folder',
+    'load_model',
+    'run_inference_on_image',
     
     # Función principal
     'train_sgsnet',

@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block title %}Detección de Imagen Única - StrawberryVision{% endblock %}
+
+{% block content %}
+<section class="sv-page-header">
+    <h1>Detección de Imagen Única</h1>
+    <p>Arrastra y suelta tu imagen aquí, o haz clic para seleccionar un archivo.</p>
+</section>
+
+<!-- Zona de carga -->
+<div class="sv-card">
+    <div id="dropzone" class="sv-dropzone">
+        <input type="file" id="file-input" accept="image/*" hidden>
+        
+        <div id="drop-placeholder">
+            <div class="sv-dropzone-icon">
+                <i class="fas fa-cloud-upload-alt"></i>
+            </div>
+            <p class="sv-dropzone-title">Subir Imagen</p>
+            <p class="sv-dropzone-subtitle">Formatos soportados: JPG, PNG, WEBP</p>
+            <button type="button" id="select-btn" class="sv-btn sv-btn-primary">
+                Seleccionar Archivo
+            </button>
+        </div>
+        
+        <img id="preview-image" class="sv-dropzone-preview hidden" alt="Vista previa">
+    </div>
+    
+    <div id="analyze-actions" class="hidden" style="margin-top: 1rem; display: flex; gap: 1rem; justify-content: center;">
+        <button id="change-btn" class="sv-btn sv-btn-secondary">
+            <i class="fas fa-redo"></i> Cambiar Imagen
+        </button>
+        <button id="analyze-btn" class="sv-btn sv-btn-primary">
+            <i class="fas fa-search"></i> Analizar Imagen
+        </button>
+    </div>
+</div>
+
+<!-- Barra de progreso -->
+<div id="progress-container" class="sv-progress-container hidden">
+    <div class="sv-progress-header">
+        <div class="sv-progress-spinner"></div>
+        <span class="sv-progress-title">Analizando imagen...</span>
+    </div>
+    <p class="sv-progress-subtitle">Por favor, espere un momento mientras procesamos su imagen.</p>
+    <div class="sv-progress-bar-container">
+        <div class="sv-progress-bar">
+            <div id="progress-bar-fill" class="sv-progress-bar-fill" style="width: 0%"></div>
+        </div>
+        <span id="progress-percent" class="sv-progress-percent">0%</span>
+    </div>
+</div>
+
+<!-- Resultados del análisis -->
+<section id="results-section" class="sv-results-section hidden">
+    <h2>Resultados del Análisis</h2>
+    
+    <div class="sv-results-grid">
+        <!-- Contadores por clase -->
+        <div class="sv-class-counters">
+            <h3>Contadores por Clase</h3>
+            <div id="class-counters-list">
+                <!-- Se llena dinámicamente -->
+            </div>
+            
+            <div class="sv-scores-section">
+                <h3>Score Máximo por Clase</h3>
+                <div id="class-scores-list">
+                    <!-- Se llena dinámicamente -->
+                </div>
+            </div>
+        </div>
+        
+        <!-- Imagen Original -->
+        <div class="sv-image-card">
+            <h3>Imagen Original</h3>
+            <img id="original-image" src="" alt="Imagen original">
+        </div>
+        
+        <!-- Imagen Anotada -->
+        <div class="sv-image-card">
+            <h3>Imagen Anotada</h3>
+            <img id="annotated-image" src="" alt="Imagen con detecciones">
+        </div>
+    </div>
+    
+    <!-- Acciones -->
+    <div style="margin-top: 1.5rem; display: flex; gap: 1rem; justify-content: flex-end;">
+        <button id="new-analysis-btn" class="sv-btn sv-btn-secondary">
+            <i class="fas fa-plus"></i> Analizar otra imagen
+        </button>
+        <button id="save-history-btn" class="sv-btn sv-btn-success">
+            <i class="fas fa-save"></i> Guardar en historial
+        </button>
+    </div>
+</section>
+
+<!-- Debug JSON (colapsable) -->
+<details id="debug-section" class="hidden" style="margin-top: 1.5rem;">
+    <summary style="cursor: pointer; font-weight: 500; color: var(--text-secondary);">
+        <i class="fas fa-code"></i> Ver respuesta JSON (desarrolladores)
+    </summary>
+    <pre id="json-output" style="background: #1e293b; color: #e2e8f0; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; margin-top: 0.5rem; font-size: 0.8rem;"></pre>
+</details>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', path='js/single_image.js') }}"></script>
+{% endblock %}

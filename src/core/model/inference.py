@@ -1,5 +1,6 @@
 """
-Funciones de inferencia y testing del modelo
+Funciones de inferencia y testing del modelo SGSNet v2 - Multi-escala
+Incluye Soft-NMS para mejor manejo de objetos superpuestos
 """
 import torch
 import cv2
@@ -10,9 +11,134 @@ import glob
 from urllib.parse import urlparse, unquote
 from .config import Config
 from .dataset import get_transforms
-from .architecture import SGSNet  # nuevo
-from .config import Config
-from .dataset import get_transforms
+from .architecture import SGSNet
+
+
+def soft_nms(detections, sigma=0.5, score_threshold=0.01):
+    """
+    Soft-NMS: reduce scores de detecciones superpuestas en lugar de eliminarlas
+    Mejor para objetos cercanos/superpuestos como múltiples fresas
+    
+    Args:
+        detections: Lista de detecciones con 'bbox', 'obj_conf', etc.
+        sigma: Parámetro de decay gaussiano
+        score_threshold: Umbral mínimo de score
+        
+    Returns:
+        Lista de detecciones filtradas
+    """
+    if len(detections) == 0:
+        return []
+    
+    # Convertir a arrays para procesamiento eficiente
+    boxes = np.array([d['bbox'] for d in detections])  # [cx, cy, w, h]
+    scores = np.array([d['obj_conf'] for d in detections])
+    
+    # Convertir a formato [x1, y1, x2, y2]
+    x1 = boxes[:, 0] - boxes[:, 2] / 2
+    y1 = boxes[:, 1] - boxes[:, 3] / 2
+    x2 = boxes[:, 0] + boxes[:, 2] / 2
+    y2 = boxes[:, 1] + boxes[:, 3] / 2
+    
+    areas = (x2 - x1) * (y2 - y1)
+    
+    # Ordenar por score descendente
+    order = scores.argsort()[::-1]
+    
+    keep_indices = []
+    
+    while len(order) > 0:
+        i = order[0]
+        keep_indices.append(i)
+        
+        if len(order) == 1:
+            break
+        
+        # Calcular IoU con resto de cajas
+        xx1 = np.maximum(x1[i], x1[order[1:]])
+        yy1 = np.maximum(y1[i], y1[order[1:]])
+        xx2 = np.minimum(x2[i], x2[order[1:]])
+        yy2 = np.minimum(y2[i], y2[order[1:]])
+        
+        w = np.maximum(0, xx2 - xx1)
+        h = np.maximum(0, yy2 - yy1)
+        
+        inter = w * h
+        iou = inter / (areas[i] + areas[order[1:]] - inter + 1e-16)
+        
+        # Soft-NMS: decay gaussiano
+        weights = np.exp(-(iou ** 2) / sigma)
+        scores[order[1:]] *= weights
+        
+        # Filtrar por score threshold
+        remaining = np.where(scores[order[1:]] >= score_threshold)[0]
+        order = order[remaining + 1]
+    
+    # Filtrar detecciones
+    return [detections[i] for i in keep_indices if scores[i] >= score_threshold]
+
+
+def extract_detections_multiscale(predictions_list, conf_threshold, anchors_list=None):
+    """
+    Extrae detecciones de predicciones multi-escala
+    
+    Args:
+        predictions_list: Lista de predicciones [pred_p3, pred_p4, pred_p5]
+        conf_threshold: Umbral de confianza
+        anchors_list: Lista de anchors por escala (opcional)
+        
+    Returns:
+        list: Lista de detecciones combinadas de todas las escalas
+    """
+    all_detections = []
+    
+    if anchors_list is None:
+        anchors_list = Config.ANCHORS
+    
+    for scale_idx, predictions in enumerate(predictions_list):
+        B, C, H, W = predictions.shape
+        num_anchors = Config.ANCHORS_PER_SCALE
+        anchors = anchors_list[scale_idx]
+        
+        # Reformatear: [B, A*(5+C), H, W] -> [B, A, H, W, 5+C]
+        pred_reshaped = predictions.view(B, num_anchors, 5 + Config.NUM_CLASSES, H, W)
+        pred_reshaped = pred_reshaped.permute(0, 1, 3, 4, 2).contiguous()
+        
+        for anchor_idx in range(num_anchors):
+            for gy in range(H):
+                for gx in range(W):
+                    obj_conf = torch.sigmoid(pred_reshaped[0, anchor_idx, gy, gx, 0]).item()
+                    
+                    if obj_conf > conf_threshold:
+                        # Decodificar bbox
+                        dx = torch.sigmoid(pred_reshaped[0, anchor_idx, gy, gx, 1]).item()
+                        dy = torch.sigmoid(pred_reshaped[0, anchor_idx, gy, gx, 2]).item()
+                        dw = torch.sigmoid(pred_reshaped[0, anchor_idx, gy, gx, 3]).item()
+                        dh = torch.sigmoid(pred_reshaped[0, anchor_idx, gy, gx, 4]).item()
+                        
+                        # Convertir a coordenadas normalizadas [0, 1]
+                        cx = (gx + dx) / W
+                        cy = (gy + dy) / H
+                        w = dw  # Ya está en rango [0, 1] después de sigmoid
+                        h = dh
+                        
+                        # Obtener clase
+                        class_scores = torch.sigmoid(pred_reshaped[0, anchor_idx, gy, gx, 5:])
+                        class_conf, class_idx = torch.max(class_scores, dim=0)
+                        
+                        all_detections.append({
+                            'bbox': [cx, cy, w, h],
+                            'obj_conf': obj_conf,
+                            'class_idx': class_idx.item(),
+                            'class_conf': class_conf.item(),
+                            'class_name': Config.CLASS_NAMES[class_idx.item()],
+                            'scale': scale_idx
+                        })
+    
+    # Aplicar Soft-NMS
+    all_detections = soft_nms(all_detections, sigma=0.5, score_threshold=conf_threshold * 0.5)
+    
+    return all_detections
 
 
 def test_model_on_image(model_path, image_path, conf_threshold=0.2, save_output=True):
@@ -28,10 +154,8 @@ def test_model_on_image(model_path, image_path, conf_threshold=0.2, save_output=
     Returns:
         dict: Resultados de las detecciones
     """
-    from .architecture import SGSNet
-    
     print("="*60)
-    print("TESTING MODELO EN IMAGEN")
+    print("TESTING MODELO SGSNet v2 EN IMAGEN")
     print("="*60)
 
     # 1. Cargar modelo
@@ -70,24 +194,19 @@ def test_model_on_image(model_path, image_path, conf_threshold=0.2, save_output=
     print(f"✓ Tensor shape: {image_tensor.shape}")
 
     # 4. Inferencia
-    print(f"\n[4/5] Ejecutando inferencia...")
+    print(f"\n[4/5] Ejecutando inferencia multi-escala...")
     with torch.no_grad():
-        predictions = model(image_tensor)
+        predictions_list = model(image_tensor)
 
-    # Procesar predicciones
-    detections = extract_detections(predictions, conf_threshold)
+    # Procesar predicciones multi-escala
+    detections = extract_detections_multiscale(predictions_list, conf_threshold)
     print(f"✓ Detecciones encontradas: {len(detections)}")
 
-    # Mostrar estadísticas
-    B, C, H, W = predictions.shape
-    pred_reshaped = predictions.view(B, 3, 5 + Config.NUM_CLASSES, H, W)
-    pred_reshaped = pred_reshaped.permute(0, 1, 3, 4, 2).contiguous()
-    obj_scores = torch.sigmoid(pred_reshaped[0, :, :, :, 0])
-    
-    print(f"\nMÉTRICAS:")
-    print(f"  Confianza máxima: {obj_scores.max().item():.4f}")
-    print(f"  Confianza promedio: {obj_scores.mean().item():.4f}")
-    print(f"  Predicciones > {conf_threshold}: {(obj_scores > conf_threshold).sum().item()}")
+    # Mostrar estadísticas por escala
+    print(f"\nDETECCIONES POR ESCALA:")
+    for scale_idx, scale_name in enumerate(['P3 (64x64)', 'P4 (32x32)', 'P5 (16x16)']):
+        scale_dets = [d for d in detections if d.get('scale') == scale_idx]
+        print(f"  {scale_name}: {len(scale_dets)} detecciones")
 
     # 5. Visualización
     print(f"\n[5/5] Generando visualización...")
@@ -102,8 +221,6 @@ def test_model_on_image(model_path, image_path, conf_threshold=0.2, save_output=
     return {
         'detections': detections,
         'num_detections': len(detections),
-        'max_confidence': obj_scores.max().item(),
-        'mean_confidence': obj_scores.mean().item(),
         'image_shape': (orig_h, orig_w),
         'visualization': vis_image
     }
@@ -112,14 +229,20 @@ def test_model_on_image(model_path, image_path, conf_threshold=0.2, save_output=
 def extract_detections(predictions, conf_threshold):
     """
     Extrae detecciones de las predicciones del modelo
+    Versión compatible con modelo v1 (single scale) y v2 (multi-scale)
     
     Args:
-        predictions: Tensor de predicciones
+        predictions: Tensor o lista de predicciones
         conf_threshold: Umbral de confianza
         
     Returns:
         list: Lista de detecciones
     """
+    # Si es una lista, usar extracción multi-escala
+    if isinstance(predictions, list):
+        return extract_detections_multiscale(predictions, conf_threshold)
+    
+    # Compatibilidad con modelo v1 (single scale)
     B, C, H, W = predictions.shape
     num_anchors = 3
     pred_reshaped = predictions.view(B, num_anchors, 5 + Config.NUM_CLASSES, H, W)
@@ -370,4 +493,3 @@ def run_batch_inference(image_paths, model_path, conf_threshold=None):
         preds = run_inference_on_image(model, path, conf_threshold)
         results.append(preds)
     return results
-# ...existing code...

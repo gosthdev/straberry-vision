@@ -1,0 +1,244 @@
+{% extends "base.html" %}
+
+{% block title %}Resultados de Detección - StrawberryVision{% endblock %}
+
+{% block content %}
+<section class="sv-page-header" style="display: flex; justify-content: space-between; align-items: flex-start;">
+    <div>
+        <h1>Resultados de Detección por Lotes</h1>
+        <p>Resumen y detalle de las imágenes procesadas en el lote actual.</p>
+    </div>
+    <a href="/batch" class="sv-btn sv-btn-primary">
+        <i class="fas fa-plus"></i> Nuevo Lote
+    </a>
+</section>
+
+<!-- Dashboard de métricas -->
+<div id="dashboard" class="sv-dashboard-grid">
+    <!-- Donut Chart - Resumen del lote -->
+    <div class="sv-donut-card">
+        <h3>Resumen del Lote</h3>
+        <p class="subtitle">Distribución de clases de madurez.</p>
+        <div class="sv-donut-container">
+            <canvas id="donut-chart"></canvas>
+            <div class="sv-donut-center">
+                <span id="total-detections" class="sv-donut-number">0</span>
+                <span class="sv-donut-label">Detecciones</span>
+            </div>
+        </div>
+        <div id="legend" class="sv-legend">
+            <!-- Se llena dinámicamente -->
+        </div>
+    </div>
+    
+    <!-- Stats Cards -->
+    <div class="sv-stat-card">
+        <p class="label">Total de Imágenes</p>
+        <p id="stat-images" class="value">0</p>
+    </div>
+    
+    <div class="sv-stat-card">
+        <p class="label">Total de Detecciones</p>
+        <p id="stat-detections" class="value">0</p>
+    </div>
+    
+    <div class="sv-stat-card">
+        <p class="label">Clase Dominante</p>
+        <p id="stat-dominant" class="value text">-</p>
+    </div>
+</div>
+
+<!-- Galería de imágenes procesadas -->
+<section class="sv-results-section">
+    <h2>Resultados por Imagen</h2>
+    <div id="gallery" class="sv-gallery">
+        <!-- Se llena dinámicamente -->
+    </div>
+</section>
+
+<!-- Mensaje cuando no hay resultados -->
+<div id="no-results" class="sv-card hidden" style="text-align: center; padding: 3rem;">
+    <i class="fas fa-inbox" style="font-size: 3rem; color: var(--text-secondary); margin-bottom: 1rem;"></i>
+    <h3 style="margin: 0 0 0.5rem;">No hay resultados disponibles</h3>
+    <p style="color: var(--text-secondary); margin: 0 0 1.5rem;">Procesa un lote de imágenes para ver los resultados aquí.</p>
+    <a href="/batch" class="sv-btn sv-btn-primary">
+        <i class="fas fa-images"></i> Ir a Procesamiento por Lotes
+    </a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const dashboard = document.getElementById("dashboard");
+    const gallery = document.getElementById("gallery");
+    const noResults = document.getElementById("no-results");
+    const totalDetectionsEl = document.getElementById("total-detections");
+    const statImages = document.getElementById("stat-images");
+    const statDetections = document.getElementById("stat-detections");
+    const statDominant = document.getElementById("stat-dominant");
+    const legendEl = document.getElementById("legend");
+
+    // Mapeo de clases
+    const CLASS_LABELS = {
+        'flowering': 'Floración 🌸',
+        'growing_g': 'Verde 🌱',
+        'growing_w': 'Blanco ⚪',
+        'nearly_m': 'Casi maduro 🍊',
+        'mature': 'Maduro 🍓'
+    };
+
+    const CLASS_COLORS = {
+        'flowering': '#FF69B4',
+        'growing_g': '#22C55E',
+        'growing_w': '#FCD34D',
+        'nearly_m': '#F97316',
+        'mature': '#EF4444'
+    };
+
+    const CLASS_CSS = {
+        'flowering': 'flowering',
+        'growing_g': 'growing-g',
+        'growing_w': 'growing-w',
+        'nearly_m': 'nearly-m',
+        'mature': 'mature'
+    };
+
+    // Cargar datos del lote actual
+    const batchDataRaw = localStorage.getItem("sv_current_batch");
+    
+    if (!batchDataRaw) {
+        dashboard.classList.add("hidden");
+        noResults.classList.remove("hidden");
+        return;
+    }
+
+    const batchData = JSON.parse(batchDataRaw);
+    const results = batchData.results || [];
+    const validResults = results.filter(r => !r.error);
+
+    if (validResults.length === 0) {
+        dashboard.classList.add("hidden");
+        noResults.classList.remove("hidden");
+        return;
+    }
+
+    // Calcular estadísticas
+    let totalDetections = 0;
+    const classCounts = {};
+    
+    validResults.forEach(result => {
+        const numDet = result.num_detections || 0;
+        totalDetections += numDet;
+        
+        if (result.summary_by_class) {
+            Object.entries(result.summary_by_class).forEach(([cls, info]) => {
+                classCounts[cls] = (classCounts[cls] || 0) + (info.count || 0);
+            });
+        }
+    });
+
+    // Encontrar clase dominante
+    let dominantClass = '-';
+    let maxCount = 0;
+    Object.entries(classCounts).forEach(([cls, count]) => {
+        if (count > maxCount) {
+            maxCount = count;
+            dominantClass = CLASS_LABELS[cls] || cls;
+        }
+    });
+
+    // Actualizar estadísticas
+    statImages.textContent = validResults.length;
+    statDetections.textContent = totalDetections;
+    totalDetectionsEl.textContent = totalDetections;
+    statDominant.textContent = dominantClass;
+
+    // Crear gráfico donut
+    const ctx = document.getElementById("donut-chart").getContext("2d");
+    const labels = Object.keys(classCounts).map(c => CLASS_LABELS[c] || c);
+    const data = Object.values(classCounts);
+    const colors = Object.keys(classCounts).map(c => CLASS_COLORS[c] || '#888');
+
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: data,
+                backgroundColor: colors,
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '65%',
+            plugins: {
+                legend: {
+                    display: false
+                }
+            }
+        }
+    });
+
+    // Crear leyenda
+    Object.entries(classCounts).forEach(([cls, count]) => {
+        const item = document.createElement("div");
+        item.className = "sv-legend-item";
+        item.innerHTML = `
+            <div class="sv-legend-label">
+                <span class="sv-class-dot ${CLASS_CSS[cls]}"></span>
+                <span>${CLASS_LABELS[cls] || cls}</span>
+            </div>
+            <span class="sv-legend-count">${count}</span>
+        `;
+        legendEl.appendChild(item);
+    });
+
+    // Crear galería de imágenes
+    validResults.forEach(result => {
+        const item = document.createElement("div");
+        item.className = "sv-gallery-item";
+        
+        // Crear tags de clases detectadas
+        let tagsHtml = '';
+        if (result.summary_by_class) {
+            Object.entries(result.summary_by_class).forEach(([cls, info]) => {
+                if (info.count > 0) {
+                    tagsHtml += `<span class="sv-tag ${CLASS_CSS[cls]}">${CLASS_LABELS[cls]?.split(' ')[0] || cls}: ${info.count}</span>`;
+                }
+            });
+        }
+
+        // Determinar clase dominante de esta imagen
+        let imgDominant = '-';
+        let imgMaxCount = 0;
+        if (result.summary_by_class) {
+            Object.entries(result.summary_by_class).forEach(([cls, info]) => {
+                if ((info.count || 0) > imgMaxCount) {
+                    imgMaxCount = info.count;
+                    imgDominant = CLASS_LABELS[cls]?.split(' ')[0] || cls;
+                }
+            });
+        }
+
+        item.innerHTML = `
+            ${result.annotated_image_base64 
+                ? `<img src="data:image/png;base64,${result.annotated_image_base64}" class="sv-gallery-image" alt="${result.filename}">`
+                : `<div class="sv-gallery-image" style="background: #f3f4f6; display: flex; align-items: center; justify-content: center;"><i class="fas fa-image" style="font-size: 3rem; color: #d1d5db;"></i></div>`
+            }
+            <div class="sv-gallery-info">
+                <h4>${result.filename || 'Sin nombre'}</h4>
+                <p>${result.num_detections || 0} Detecciones | Dominante: ${imgDominant}</p>
+                <div class="sv-gallery-tags">
+                    ${tagsHtml || '<span style="color: var(--text-secondary); font-size: 0.8rem;">Sin detecciones</span>'}
+                </div>
+            </div>
+        `;
+        
+        gallery.appendChild(item);
+    });
+});
+</script>
+{% endblock %}

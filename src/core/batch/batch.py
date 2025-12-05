@@ -11,8 +11,8 @@ if str(PROJECT_ROOT) not in sys.path:
 import torch
 from pyspark.sql import SparkSession, functions as F, types as T
 from pyspark import SparkFiles
-from src.core.config import Config
-from src.core.inference import load_model, run_inference_on_image
+from src.core.model.config import Config
+from src.core.model.inference import load_model, run_inference_on_image
 
 # Forzar ejecución en CPU para reducir consumo y evitar OOM en GPU
 os.environ.setdefault("CUDA_VISIBLE_DEVICES", "")

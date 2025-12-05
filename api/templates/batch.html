@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block title %}Carga de Detección por Lotes - StrawberryVision{% endblock %}
+
+{% block content %}
+<section class="sv-page-header">
+    <h1>Carga de Detección por Lotes</h1>
+    <p>Procesa múltiples imágenes de fresas de forma simultánea.</p>
+</section>
+
+<!-- Zona de carga -->
+<div class="sv-card">
+    <div id="dropzone" class="sv-dropzone">
+        <input type="file" id="file-input" accept="image/*" multiple hidden>
+        
+        <div id="drop-placeholder">
+            <div class="sv-dropzone-icon">
+                <i class="fas fa-cloud-upload-alt"></i>
+            </div>
+            <p class="sv-dropzone-title">Arrastra y suelta tus imágenes o carpeta aquí</p>
+            <p class="sv-dropzone-subtitle">O haz clic para seleccionar los archivos. Formatos soportados: JPG, PNG, WEBP</p>
+            <button type="button" id="select-btn" class="sv-btn sv-btn-primary">
+                <i class="fas fa-folder-open"></i> Seleccionar Archivos/Carpeta
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Sección de progreso (aparece al seleccionar archivos) -->
+<div id="upload-section" class="sv-card hidden" style="margin-top: 1.5rem;">
+    <h3 style="margin: 0 0 1rem;">Progreso de la Carga</h3>
+    
+    <!-- Barra de progreso total -->
+    <div class="sv-progress-container" style="box-shadow: none; padding: 0; border: none;">
+        <div class="sv-progress-header">
+            <span class="sv-progress-title">Progreso Total</span>
+            <span id="progress-percent" class="sv-progress-percent">0%</span>
+        </div>
+        <div class="sv-progress-bar-container">
+            <div class="sv-progress-bar" style="height: 10px;">
+                <div id="progress-bar-fill" class="sv-progress-bar-fill" style="width: 0%"></div>
+            </div>
+        </div>
+        <p id="progress-text" style="font-size: 0.85rem; color: var(--text-secondary); margin: 0.5rem 0 0;">
+            0 de 0 archivos completados
+        </p>
+    </div>
+    
+    <!-- Tabla de archivos -->
+    <table class="sv-batch-table" style="margin-top: 1.5rem;">
+        <thead>
+            <tr>
+                <th>Nombre de Archivo</th>
+                <th>Tamaño</th>
+                <th>Estado</th>
+            </tr>
+        </thead>
+        <tbody id="files-table-body">
+            <!-- Se llena dinámicamente -->
+        </tbody>
+    </table>
+    
+    <!-- Acciones -->
+    <div style="margin-top: 1.5rem; display: flex; gap: 1rem; justify-content: flex-end;">
+        <button id="cancel-btn" class="sv-btn sv-btn-secondary">
+            Cancelar
+        </button>
+        <button id="view-results-btn" class="sv-btn sv-btn-success" disabled>
+            <i class="fas fa-chart-pie"></i> Ver Detecciones
+        </button>
+    </div>
+</div>
+
+<!-- Formulario de metadatos del lote (opcional) -->
+<div id="meta-form" class="sv-card hidden" style="margin-top: 1.5rem;">
+    <h3 style="margin: 0 0 1rem;">Información del Lote (Opcional)</h3>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+        <div class="sv-form-group">
+            <label for="lote-id">ID del Lote</label>
+            <input type="text" id="lote-id" class="sv-input" placeholder="Ej: LOTE-2025-001">
+        </div>
+        <div class="sv-form-group">
+            <label for="location">Ubicación</label>
+            <input type="text" id="location" class="sv-input" placeholder="Ej: Parcela 3 - Norte">
+        </div>
+    </div>
+    <div class="sv-form-group" style="margin-top: 1rem;">
+        <label for="description">Descripción</label>
+        <textarea id="description" class="sv-textarea" placeholder="Notas adicionales sobre el lote..."></textarea>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', path='js/batch.js') }}"></script>
+{% endblock %}

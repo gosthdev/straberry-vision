@@ -46,8 +46,8 @@ def train_epoch(model, train_loader, optimizer, criterion, scaler):
         scaler.step(optimizer)
         scaler.update()
 
-        # Actualizar métricas
-        metrics.update(loss.item(), loss_dict, predictions, target_boxes, target_labels)
+        # Actualizar métricas (sin calcular precision/recall en cada batch - es muy lento)
+        metrics.update(loss.item(), loss_dict)
         
         # Actualizar barra de progreso
         progress_bar.set_postfix({
@@ -85,7 +85,8 @@ def validate_epoch(model, val_loader, criterion):
             predictions = model(images)
             loss, loss_dict = criterion(predictions, target_boxes, target_labels)
 
-            metrics.update(loss.item(), loss_dict, predictions, target_boxes, target_labels)
+            # Solo calcular loss, no métricas de detección (es muy lento)
+            metrics.update(loss.item(), loss_dict)
             
             progress_bar.set_postfix({
                 'L': f'{loss.item():.3f}',

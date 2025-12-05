@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <title>{% block title %}StrawberryVision{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='css/styles.css') }}">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- Chart.js para gráficos -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Iconos -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+<header class="sv-header">
+    <div class="sv-header-inner">
+        <a href="{{ url_for('home') }}" class="sv-logo">
+            <span class="sv-logo-icon">🍓</span>
+            <span class="sv-logo-text">StrawberryVision</span>
+        </a>
+        <nav class="sv-nav">
+            <a href="{{ url_for('home') }}" class="{% if request.url.path == '/' %}active{% endif %}">
+                <i class="fas fa-home"></i> Inicio
+            </a>
+            <a href="{{ url_for('single_image_page') }}" class="{% if request.url.path == '/single' %}active{% endif %}">
+                <i class="fas fa-image"></i> Imagen Única
+            </a>
+            <a href="{{ url_for('batch_page') }}" class="{% if request.url.path == '/batch' %}active{% endif %}">
+                <i class="fas fa-images"></i> Por Lotes
+            </a>
+            <a href="{{ url_for('results_page') }}" class="{% if request.url.path == '/results' %}active{% endif %}">
+                <i class="fas fa-chart-pie"></i> Resultados
+            </a>
+        </nav>
+        <div class="sv-header-actions">
+            <button class="sv-icon-btn" title="Configuración">
+                <i class="fas fa-cog"></i>
+            </button>
+            <button class="sv-icon-btn" title="Notificaciones">
+                <i class="fas fa-bell"></i>
+            </button>
+            <div class="sv-avatar-header">
+                <i class="fas fa-user"></i>
+            </div>
+        </div>
+    </div>
+</header>
+
+<main class="sv-main">
+    {% block content %}{% endblock %}
+</main>
+
+<footer class="sv-footer">
+    <div class="sv-footer-inner">
+        <div class="sv-footer-brand">
+            <span class="sv-logo-icon">🍓</span>
+            <span>StrawberryVision</span>
+        </div>
+        <p>© 2025 StrawberryVision. Sistema de detección de madurez de fresas con IA.</p>
+    </div>
+</footer>
+
+{% block scripts %}{% endblock %}
+</body>
+</html>

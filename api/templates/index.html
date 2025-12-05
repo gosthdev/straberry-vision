@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block title %}StrawberryVision - Detección de Madurez de Fresas con IA{% endblock %}
+
+{% block content %}
+<!-- Hero Section -->
+<section class="sv-hero">
+    <div class="sv-hero-text">
+        <h1>🍓 StrawberryVision</h1>
+        <p>Sistema inteligente de detección y clasificación de madurez de fresas usando visión por computadora y redes neuronales profundas.</p>
+        <div class="sv-hero-actions">
+            <a href="/single" class="sv-btn sv-btn-primary">
+                <i class="fas fa-image"></i> Analizar Imagen
+            </a>
+            <a href="/batch" class="sv-btn sv-btn-secondary">
+                <i class="fas fa-images"></i> Procesamiento por Lotes
+            </a>
+        </div>
+    </div>
+    <div class="sv-hero-image">
+        <div class="sv-hero-placeholder">🍓</div>
+    </div>
+</section>
+
+<!-- Features -->
+<section class="sv-features">
+    <div class="sv-feature-card">
+        <div class="sv-feature-icon red">
+            <i class="fas fa-image"></i>
+        </div>
+        <h3>Detección de Imagen Única</h3>
+        <p>Sube una imagen y obtén la clasificación de madurez de cada fresa detectada con bounding boxes y niveles de confianza.</p>
+        <a href="/single" class="sv-feature-link">
+            Ir a Imagen Única <i class="fas fa-arrow-right"></i>
+        </a>
+    </div>
+    
+    <div class="sv-feature-card">
+        <div class="sv-feature-icon green">
+            <i class="fas fa-layer-group"></i>
+        </div>
+        <h3>Procesamiento por Lotes</h3>
+        <p>Procesa múltiples imágenes simultáneamente. Ideal para análisis de campo o inventario de producción.</p>
+        <a href="/batch" class="sv-feature-link">
+            Ir a Por Lotes <i class="fas fa-arrow-right"></i>
+        </a>
+    </div>
+    
+    <div class="sv-feature-card">
+        <div class="sv-feature-icon blue">
+            <i class="fas fa-chart-pie"></i>
+        </div>
+        <h3>Análisis de Resultados</h3>
+        <p>Visualiza estadísticas detalladas de detecciones con gráficos interactivos y distribución de clases de madurez.</p>
+        <a href="/results" class="sv-feature-link">
+            Ver Resultados <i class="fas fa-arrow-right"></i>
+        </a>
+    </div>
+</section>
+
+<!-- Clases de madurez -->
+<section class="sv-card" style="margin-top: 2rem;">
+    <h2 style="margin: 0 0 1rem;">Clases de Madurez Detectadas</h2>
+    <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">
+        El modelo SGSNet clasifica las fresas en 5 estados de madurez:
+    </p>
+    
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem;">
+        <div style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; background: rgba(255, 105, 180, 0.1); border-radius: 0.5rem;">
+            <span style="font-size: 1.5rem;">🌸</span>
+            <div>
+                <strong style="display: block;">Floración</strong>
+                <small style="color: var(--text-secondary);">flowering</small>
+            </div>
+        </div>
+        
+        <div style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; background: rgba(34, 197, 94, 0.1); border-radius: 0.5rem;">
+            <span style="font-size: 1.5rem;">🌱</span>
+            <div>
+                <strong style="display: block;">Creciendo (Verde)</strong>
+                <small style="color: var(--text-secondary);">growing_g</small>
+            </div>
+        </div>
+        
+        <div style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; background: rgba(252, 211, 77, 0.1); border-radius: 0.5rem;">
+            <span style="font-size: 1.5rem;">⚪</span>
+            <div>
+                <strong style="display: block;">Creciendo (Blanco)</strong>
+                <small style="color: var(--text-secondary);">growing_w</small>
+            </div>
+        </div>
+        
+        <div style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; background: rgba(249, 115, 22, 0.1); border-radius: 0.5rem;">
+            <span style="font-size: 1.5rem;">🍊</span>
+            <div>
+                <strong style="display: block;">Casi Maduro</strong>
+                <small style="color: var(--text-secondary);">nearly_m</small>
+            </div>
+        </div>
+        
+        <div style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; background: rgba(239, 68, 68, 0.1); border-radius: 0.5rem;">
+            <span style="font-size: 1.5rem;">🍓</span>
+            <div>
+                <strong style="display: block;">Maduro</strong>
+                <small style="color: var(--text-secondary);">mature</small>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

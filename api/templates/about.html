@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block title %}Acerca de - StrawberryVision{% endblock %}
+
+{% block content %}
+<section class="sv-page-header">
+    <h1>Acerca de StrawberryVision</h1>
+    <p>Sistema de detección y clasificación de madurez de fresas basado en inteligencia artificial.</p>
+</section>
+
+<div class="sv-card">
+    <h2 style="margin: 0 0 1rem;">🎯 Objetivo del Proyecto</h2>
+    <p style="color: var(--text-secondary); line-height: 1.8;">
+        StrawberryVision es un sistema de visión por computadora diseñado para automatizar la 
+        clasificación de fresas según su estado de madurez. Utilizando redes neuronales profundas 
+        (modelo SGSNet - Strawberry Grading System Network), el sistema puede detectar y clasificar 
+        fresas en tiempo real, facilitando procesos de control de calidad y cosecha selectiva.
+    </p>
+</div>
+
+<div class="sv-card" style="margin-top: 1.5rem;">
+    <h2 style="margin: 0 0 1rem;">🛠️ Tecnologías Utilizadas</h2>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-top: 1rem;">
+        <div style="padding: 1rem; background: #f8fafc; border-radius: 0.5rem;">
+            <strong style="color: var(--primary-red);">PyTorch</strong>
+            <p style="margin: 0.5rem 0 0; font-size: 0.9rem; color: var(--text-secondary);">Framework de deep learning para el modelo SGSNet</p>
+        </div>
+        <div style="padding: 1rem; background: #f8fafc; border-radius: 0.5rem;">
+            <strong style="color: var(--primary-green);">FastAPI</strong>
+            <p style="margin: 0.5rem 0 0; font-size: 0.9rem; color: var(--text-secondary);">Backend API moderno y de alto rendimiento</p>
+        </div>
+        <div style="padding: 1rem; background: #f8fafc; border-radius: 0.5rem;">
+            <strong style="color: #f97316;">PySpark</strong>
+            <p style="margin: 0.5rem 0 0; font-size: 0.9rem; color: var(--text-secondary);">Procesamiento distribuido para lotes grandes</p>
+        </div>
+        <div style="padding: 1rem; background: #f8fafc; border-radius: 0.5rem;">
+            <strong style="color: #6366f1;">OpenCV</strong>
+            <p style="margin: 0.5rem 0 0; font-size: 0.9rem; color: var(--text-secondary);">Procesamiento de imágenes y visualización</p>
+        </div>
+        <div style="padding: 1rem; background: #f8fafc; border-radius: 0.5rem;">
+            <strong style="color: #ec4899;">Albumentations</strong>
+            <p style="margin: 0.5rem 0 0; font-size: 0.9rem; color: var(--text-secondary);">Data augmentation avanzada</p>
+        </div>
+        <div style="padding: 1rem; background: #f8fafc; border-radius: 0.5rem;">
+            <strong style="color: #14b8a6;">Chart.js</strong>
+            <p style="margin: 0.5rem 0 0; font-size: 0.9rem; color: var(--text-secondary);">Visualización de estadísticas interactivas</p>
+        </div>
+    </div>
+</div>
+
+<div class="sv-card" style="margin-top: 1.5rem;">
+    <h2 style="margin: 0 0 1rem;">📊 Características del Modelo</h2>
+    <ul style="color: var(--text-secondary); line-height: 2; padding-left: 1.5rem;">
+        <li><strong>Arquitectura:</strong> SGSNet v2 Multi-escala (Feature Pyramid Network)</li>
+        <li><strong>Escalas de detección:</strong> P3 (64x64), P4 (32x32), P5 (16x16)</li>
+        <li><strong>Resolución de entrada:</strong> 512x512 píxeles</li>
+        <li><strong>Técnicas:</strong> Soft-NMS, Mosaic Augmentation, MixUp</li>
+        <li><strong>5 clases de detección:</strong> Floración, Creciendo (verde), Creciendo (blanco), Casi maduro, Maduro</li>
+    </ul>
+</div>
+
+<div class="sv-card" style="margin-top: 1.5rem;">
+    <h2 style="margin: 0 0 1rem;">📁 Estructura del Proyecto</h2>
+    <pre style="background: #1e293b; color: #e2e8f0; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; font-size: 0.85rem;">
+strawberry-vision/
+├── api/                    # Servidor FastAPI y frontend
+│   ├── main.py            # Endpoints de la API
+│   ├── inference_service.py  # Servicio de inferencia
+│   ├── templates/         # Plantillas HTML (Jinja2)
+│   └── static/            # CSS, JS, assets
+├── src/
+│   └── core/
+│       ├── model/         # SGSNet: arquitectura, entrenamiento, inferencia
+│       └── batch/         # Procesamiento distribuido con PySpark
+└── test/                  # Tests y evaluación
+    </pre>
+</div>
+
+<div class="sv-card" style="margin-top: 1.5rem; text-align: center;">
+    <p style="color: var(--text-secondary); margin: 0;">
+        Desarrollado con ❤️ para la agricultura inteligente
+    </p>
+    <p style="color: var(--text-secondary); margin: 0.5rem 0 0; font-size: 0.9rem;">
+        © 2025 StrawberryVision
+    </p>
+</div>
+{% endblock %}
